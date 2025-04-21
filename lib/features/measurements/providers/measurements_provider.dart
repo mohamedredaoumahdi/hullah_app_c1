@@ -3,10 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import '../../../core/services/api_service.dart';
+import '../../auth/providers/auth_provider.dart' as app_auth;
 
 class MeasurementsProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseFirestore? _firestore;
+  User? _user;
   
   Map<String, dynamic>? _measurements;
   String? _bodyShape;
@@ -19,16 +20,37 @@ class MeasurementsProvider with ChangeNotifier {
   Map<String, dynamic>? get analysisResults => _analysisResults;
   
   MeasurementsProvider() {
-    _loadUserHeight();
-    _loadSavedMeasurements();
+    _initializeFirebase();
+  }
+  
+  void _initializeFirebase() {
+    try {
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      print('Error initializing Firebase in MeasurementsProvider: $e');
+    }
+  }
+  
+  // This method allows the provider to be updated when auth changes
+  void updateAuth(app_auth.AuthProvider authProvider) {
+    _user = authProvider.user;
+    if (_user != null) {
+      _loadUserHeight();
+      _loadSavedMeasurements();
+    } else {
+      _measurements = null;
+      _bodyShape = null;
+      _userHeight = null;
+      _analysisResults = null;
+    }
+    notifyListeners();
   }
   
   Future<void> _loadUserHeight() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) return;
     
     try {
-      final doc = await _firestore.collection('Registration').doc(user.uid).get();
+      final doc = await _firestore!.collection('Registration').doc(_user!.uid).get();
       if (doc.exists && doc.data()?['height'] != null) {
         _userHeight = doc.data()!['height'] as double;
         notifyListeners();
@@ -39,11 +61,10 @@ class MeasurementsProvider with ChangeNotifier {
   }
   
   Future<void> _loadSavedMeasurements() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) return;
     
     try {
-      final doc = await _firestore.collection('my measurements').doc(user.uid).get();
+      final doc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
       if (doc.exists) {
         _measurements = doc.data();
         _bodyShape = doc.data()?['bodyShape'] as String?;
@@ -61,8 +82,9 @@ class MeasurementsProvider with ChangeNotifier {
     required double shoulder,
     required double armLength,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
     
     try {
       final manualMeasurements = {
@@ -93,7 +115,7 @@ class MeasurementsProvider with ChangeNotifier {
         'timestamp': FieldValue.serverTimestamp(),
       };
       
-      await _firestore.collection('my measurements').doc(user.uid).set(data);
+      await _firestore!.collection('my measurements').doc(_user!.uid).set(data);
       notifyListeners();
     } catch (e) {
       print('Error saving measurements: $e');
@@ -102,8 +124,9 @@ class MeasurementsProvider with ChangeNotifier {
   }
   
   Future<void> saveImageAnalysisResults(File imageFile) async {
-    final user = _auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
     
     try {
       // Process image through API
@@ -127,18 +150,11 @@ class MeasurementsProvider with ChangeNotifier {
         'timestamp': FieldValue.serverTimestamp(),
       };
       
-      await _firestore.collection('my measurements').doc(user.uid).set(data);
+      await _firestore!.collection('my measurements').doc(_user!.uid).set(data);
       notifyListeners();
     } catch (e) {
       print('Error saving image analysis results: $e');
       rethrow;
     }
-  }
-  
-  // The calculateBodyShape method is no longer needed as the API handles it
-  // Keeping it for backward compatibility if needed
-  Future<void> calculateBodyShape() async {
-    // This is now handled by the API during measurement processing
-    // No action needed here
   }
 }

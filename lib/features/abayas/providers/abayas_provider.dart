@@ -3,10 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/abaya_model.dart';
 import '../../../core/services/api_service.dart';
+import '../../auth/providers/auth_provider.dart' as app_auth;
 
 class AbayasProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseFirestore? _firestore;
+  User? _user;
   
   List<AbayaModel> _recommendedAbayas = [];
   Set<String> _selectedAbayaIds = {};
@@ -16,7 +17,29 @@ class AbayasProvider with ChangeNotifier {
   Set<String> get selectedAbayaIds => _selectedAbayaIds;
   bool get isLoading => _isLoading;
   
+  AbayasProvider() {
+    _initializeFirebase();
+  }
+  
+  void _initializeFirebase() {
+    try {
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      print('Error initializing Firebase in AbayasProvider: $e');
+    }
+  }
+  
+  // This method allows the provider to be updated when auth changes
+  void updateAuth(app_auth.AuthProvider authProvider) {
+    _user = authProvider.user;
+    notifyListeners();
+  }
+  
   Future<void> loadRecommendedAbayas() async {
+    if (_firestore == null) {
+      throw Exception('Firebase not initialized');
+    }
+    
     _isLoading = true;
     notifyListeners();
     
@@ -39,7 +62,7 @@ class AbayasProvider with ChangeNotifier {
       
       // If no specific recommendations, load general abayas
       if (_recommendedAbayas.isEmpty) {
-        final generalQuery = await _firestore
+        final generalQuery = await _firestore!
             .collection('Abayas')
             .limit(16)
             .get();
@@ -61,6 +84,8 @@ class AbayasProvider with ChangeNotifier {
   }
   
   Future<List<AbayaModel>> _processApiRecommendations(List<Map<String, dynamic>> recommendations) async {
+    if (_firestore == null) return [];
+    
     final List<AbayaModel> abayas = [];
     
     for (var recommendation in recommendations) {
@@ -79,7 +104,7 @@ class AbayasProvider with ChangeNotifier {
         abayas.add(abaya);
         
         // Also save to Firebase for persistence
-        await _firestore.collection('Abayas').doc(abaya.id).set(abaya.toMap(), SetOptions(merge: true));
+        await _firestore!.collection('Abayas').doc(abaya.id).set(abaya.toMap(), SetOptions(merge: true));
       } catch (e) {
         print('Error processing recommendation: $e');
       }
@@ -106,8 +131,10 @@ class AbayasProvider with ChangeNotifier {
   }
   
   Future<AbayaModel?> getAbayaById(String id) async {
+    if (_firestore == null) return null;
+    
     try {
-      final doc = await _firestore.collection('Abayas').doc(id).get();
+      final doc = await _firestore!.collection('Abayas').doc(id).get();
       if (doc.exists) {
         return AbayaModel.fromMap({
           'id': doc.id,
@@ -126,8 +153,7 @@ class AbayasProvider with ChangeNotifier {
   }
   
   Future<void> saveSelectedAbayasToSummary() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) return;
     
     try {
       final List<Map<String, dynamic>> selectedAbayasData = [];
@@ -137,7 +163,7 @@ class AbayasProvider with ChangeNotifier {
         selectedAbayasData.add(abaya.toMap());
       }
       
-      await _firestore.collection('my summary').doc(user.uid).set({
+      await _firestore!.collection('my summary').doc(_user!.uid).set({
         'selectedAbayas': selectedAbayasData,
         'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -148,11 +174,10 @@ class AbayasProvider with ChangeNotifier {
   }
   
   Future<String?> _getUserBodyShape() async {
-    final user = _auth.currentUser;
-    if (user == null) return null;
+    if (_user == null || _firestore == null) return null;
     
     try {
-      final doc = await _firestore.collection('my measurements').doc(user.uid).get();
+      final doc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
       if (doc.exists && doc.data()?['bodyShape'] != null) {
         return doc.data()!['bodyShape'] as String;
       }

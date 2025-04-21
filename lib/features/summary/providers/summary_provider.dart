@@ -4,11 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hullah_app/core/utils/pdf_generator.dart';
 import 'dart:io';
 import '../../abayas/models/abaya_model.dart';
-
+import '../../auth/providers/auth_provider.dart' as app_auth;
 
 class SummaryProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseFirestore? _firestore;
+  User? _user;
   
   Map<String, dynamic>? _summary;
   List<AbayaModel> _selectedAbayas = [];
@@ -18,16 +18,39 @@ class SummaryProvider with ChangeNotifier {
   List<AbayaModel> get selectedAbayas => _selectedAbayas;
   bool get isLoading => _isLoading;
   
+  SummaryProvider() {
+    _initializeFirebase();
+  }
+  
+  void _initializeFirebase() {
+    try {
+      _firestore = FirebaseFirestore.instance;
+    } catch (e) {
+      print('Error initializing Firebase in SummaryProvider: $e');
+    }
+  }
+  
+  // This method allows the provider to be updated when auth changes
+  void updateAuth(app_auth.AuthProvider authProvider) {
+    _user = authProvider.user;
+    if (_user != null) {
+      loadSummary();
+    } else {
+      _summary = null;
+      _selectedAbayas = [];
+    }
+    notifyListeners();
+  }
+  
   Future<void> loadSummary() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) return;
     
     _isLoading = true;
     notifyListeners();
     
     try {
       // Load summary data
-      final summaryDoc = await _firestore.collection('my summary').doc(user.uid).get();
+      final summaryDoc = await _firestore!.collection('my summary').doc(_user!.uid).get();
       if (summaryDoc.exists) {
         _summary = summaryDoc.data();
         
@@ -41,7 +64,7 @@ class SummaryProvider with ChangeNotifier {
       }
       
       // Load measurements
-      final measurementsDoc = await _firestore.collection('my measurements').doc(user.uid).get();
+      final measurementsDoc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
       if (measurementsDoc.exists) {
         _summary = {
           ..._summary ?? {},
@@ -50,7 +73,7 @@ class SummaryProvider with ChangeNotifier {
       }
       
       // Load user profile
-      final profileDoc = await _firestore.collection('Registration').doc(user.uid).get();
+      final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
       if (profileDoc.exists) {
         _summary = {
           ..._summary ?? {},
@@ -69,8 +92,9 @@ class SummaryProvider with ChangeNotifier {
     required List<AbayaModel> selectedAbayas,
     Map<String, dynamic>? additionalData,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
     
     try {
       final selectedAbayasData = selectedAbayas.map((abaya) => abaya.toMap()).toList();
@@ -81,7 +105,7 @@ class SummaryProvider with ChangeNotifier {
         ...?additionalData,
       };
       
-      await _firestore.collection('my summary').doc(user.uid).set(
+      await _firestore!.collection('my summary').doc(_user!.uid).set(
         data,
         SetOptions(merge: true),
       );
@@ -99,11 +123,12 @@ class SummaryProvider with ChangeNotifier {
   }
   
   Future<void> updateMeasurements(Map<String, dynamic> measurements) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
     
     try {
-      await _firestore.collection('my measurements').doc(user.uid).update(measurements);
+      await _firestore!.collection('my measurements').doc(_user!.uid).update(measurements);
       
       _summary = {
         ..._summary ?? {},

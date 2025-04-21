@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hullah_app/features/auth/providers/auth_provider.dart';
+import 'package:hullah_app/features/auth/providers/auth_provider.dart' as app_auth;
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
+import '../theme/app_theme.dart';
 
 /// A scaffold with RTL drawer for Arabic UI
 class RTLScaffold extends StatelessWidget {
@@ -21,7 +21,7 @@ class RTLScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = Provider.of<app_auth.AuthProvider>(context);
     
     return Directionality(
       textDirection: TextDirection.rtl,
