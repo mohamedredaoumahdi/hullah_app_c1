@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "298670487609",
+    "project_id": "body-tips",
+    "storage_bucket": "body-tips.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:298670487609:android:72cc2f555eb7968b0db5e8",
+        "android_client_info": {
+          "package_name": "com.example.hullah_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "298670487609-00skcsqh3s6kece4c45pu0tdh33bnl54.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-iSCenJ3DUPc7nw2PJsxp8bQJS1OQ0WI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "298670487609-00skcsqh3s6kece4c45pu0tdh33bnl54.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "298670487609-aaak8a2ec77h2t330k46697jh1n61fsf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.bodyTips"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
