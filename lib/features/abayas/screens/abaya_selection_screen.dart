@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/abayas_provider.dart';
-import '../models/abaya_model.dart';
 
 class AbayaSelectionScreen extends StatefulWidget {
   const AbayaSelectionScreen({super.key});
