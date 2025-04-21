@@ -13,10 +13,10 @@ import 'features/summary/providers/summary_provider.dart';
 // Global key for navigator
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
+  await Firebase.initializeApp();
   // Run app with initialization wrapper
   runApp(const AppInitializer());
 }
@@ -29,7 +29,7 @@ class AppInitializer extends StatelessWidget {
   Widget build(BuildContext context) {
     return FutureBuilder(
       // Initialize Firebase asynchronously
-      future: Firebase.initializeApp(),
+      future: Future.value(true),
       builder: (context, snapshot) {
         // Show loading indicator while initializing
         if (snapshot.connectionState == ConnectionState.waiting) {
