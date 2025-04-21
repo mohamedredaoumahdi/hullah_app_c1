@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:carousel_slider/carousel_slider.dart';
+import 'package:carousel_slider/carousel_slider.dart' as slider;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -67,8 +67,8 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Image carousel
-            CarouselSlider(
-              options: CarouselOptions(
+            slider.CarouselSlider(
+              options: slider.CarouselOptions(
                 height: 400,
                 viewportFraction: 1.0,
                 enlargeCenterPage: false,
