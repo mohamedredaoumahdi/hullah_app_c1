@@ -1,8 +1,12 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
+import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/routes/app_router.dart';
 import 'features/auth/providers/auth_provider.dart' as app_auth;
@@ -13,73 +17,134 @@ import 'features/summary/providers/summary_provider.dart';
 // Global key for navigator
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() async {
+Future<void> main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  // Run app with initialization wrapper
+  
+  // Set preferred orientations
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+  
   runApp(const AppInitializer());
 }
 
 // Widget to handle Firebase initialization
-class AppInitializer extends StatelessWidget {
+class AppInitializer extends StatefulWidget {
   const AppInitializer({super.key});
 
   @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  bool _initialized = false;
+  bool _error = false;
+  String _errorMessage = '';
+
+  // Define an async function to initialize Firebase
+  Future<void> _initializeFlutterFire() async {
+    try {
+      // Wait for Firebase to initialize
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      
+      setState(() {
+        _initialized = true;
+      });
+    } catch (e) {
+      setState(() {
+        _error = true;
+        _errorMessage = e.toString();
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeFlutterFire();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      // Initialize Firebase asynchronously
-      future: Future.value(true),
-      builder: (context, snapshot) {
-        // Show loading indicator while initializing
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return MaterialApp(
-            home: Scaffold(
-              backgroundColor: AppTheme.primaryColor,
-              body: Center(
-                child: CircularProgressIndicator(color: Colors.white),
+    // Show error widget
+    if (_error) {
+      return MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error, color: Colors.red, size: 60),
+                  SizedBox(height: 16),
+                  Text(
+                    'فشل في تهيئة التطبيق',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'يرجى التحقق من اتصال الإنترنت وإعادة المحاولة',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'خطأ: $_errorMessage',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
             ),
-          );
-        }
-        
-        // Show error screen if initialization failed
-        if (snapshot.hasError) {
-          return MaterialApp(
-            home: Scaffold(
-              backgroundColor: Colors.white,
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error, color: Colors.red, size: 48),
-                    SizedBox(height: 16),
-                    Text(
-                      'فشل في تهيئة التطبيق',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'يرجى التحقق من اتصال الإنترنت وإعادة المحاولة',
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'خطأ: ${snapshot.error}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+          ),
+        ),
+      );
+    }
+
+    // Show loading indicator
+    if (!_initialized) {
+      return MaterialApp(
+        home: Scaffold(
+          backgroundColor: AppTheme.primaryColor,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
                 ),
-              ),
+                SizedBox(height: 16),
+                Text(
+                  'جاري تحميل التطبيق...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
-          );
-        }
-        
-        // Initialization successful, launch the main app
-        return const MyApp();
-      },
-    );
+          ),
+        ),
+      );
+    }
+
+    // Application successfully initialized
+    return const MyApp();
   }
 }
 

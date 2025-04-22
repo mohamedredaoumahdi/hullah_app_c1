@@ -1,11 +1,13 @@
+// lib/features/auth/screens/register_screen.dart
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../../core/theme/app_theme.dart';
-import '../providers/auth_provider.dart';
+import '../../../core/services/direct_auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,31 +21,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  String _errorMessage = '';
+
+  // Get the direct auth service
+  final _authService = DirectAuthService.instance;
 
   Future<void> _handleRegister() async {
     if (_formKey.currentState?.saveAndValidate() ?? false) {
-      setState(() => _isLoading = true);
-      
-      final values = _formKey.currentState!.value;
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+
       try {
-        await authProvider.register(
-          name: values['name'],
-          email: values['email'],
-          password: values['password'],
-          phone: values['phone'],
-          height: double.parse(values['height']),
-          dateOfBirth: values['dateOfBirth'],
+        // Extract form values
+        final String name = _formKey.currentState!.value['name'] ?? '';
+        final String email = _formKey.currentState!.value['email'] ?? '';
+        final String password = _formKey.currentState!.value['password'] ?? '';
+        final String phone = _formKey.currentState!.value['phone'] ?? '';
+        final String heightStr = _formKey.currentState!.value['height'] ?? '';
+        final double height = double.tryParse(heightStr) ?? 170.0;
+        final DateTime dateOfBirth = _formKey.currentState!.value['dateOfBirth'] ?? DateTime.now();
+
+        // Step 1: Create the auth user
+        print('Creating auth user for $email');
+        final User? user = await _authService.signUp(email, password);
+
+        if (user == null) {
+          throw Exception('Failed to create user account');
+        }
+
+        print('User created with ID: ${user.uid}');
+
+        // Step 2: Now create the user profile
+        print('Creating user profile for ${user.uid}');
+        final success = await _authService.createUserProfile(
+          userId: user.uid,
+          name: name,
+          email: email,
+          phone: phone,
+          height: height,
+          dateOfBirth: dateOfBirth
         );
-        
+
+        if (!success) {
+          throw Exception('Failed to create user profile');
+        }
+
+        print('Registration completed successfully');
+
         if (mounted) {
+          // Navigate to home screen
           context.go('/home');
         }
       } catch (e) {
+        print('Registration error: $e');
+        
         if (mounted) {
+          setState(() {
+            _errorMessage = e.toString();
+          });
+          
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('فشل إنشاء الحساب. الرجاء المحاولة مرة أخرى.')),
+            SnackBar(
+              content: Text('فشل إنشاء الحساب: يرجى المحاولة مرة أخرى'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       } finally {
@@ -70,6 +113,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Error message display
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: EdgeInsets.all(10),
+                    margin: EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _errorMessage,
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                
                 // Name Field
                 FormBuilderTextField(
                   name: 'name',

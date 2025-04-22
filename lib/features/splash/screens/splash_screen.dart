@@ -1,3 +1,5 @@
+// lib/features/splash/screens/splash_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
