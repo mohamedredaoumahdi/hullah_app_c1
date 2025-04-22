@@ -2,15 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFFD4A574); // Beige/Gold color for branding
-  static const Color accentColor = Color(0xFFFF8FAB); // Pink color for selected items
-  static const Color blackColor = Colors.black;
-  static const Color greyColor = Color(0xFFEEEEEE); // Gray for input fields
+  // Main colors extracted from the screenshot
+  static const Color primaryColor = Color(0xFFE5A2C6); // Medium pink
+  static const Color accentColor = Color(0xFFFF8FAB); // Soft pink for selected items
+  static const Color blackColor = Colors.black; // For abaya and text
+  static const Color greyColor = Color(0xFFF4E0E2); // Very light pink for input fields
+  
+  // Gradient colors from the screenshot
+  static const Color topGradientColor = Color(0xFFEFD5D5); // Light nude/pink at top
+  static const Color middleGradientColor = Color(0xFFE5A2C6); // Medium pink in middle
+  static const Color bottomGradientColor = Color(0xFFBE6FAA); // Deeper pink/purple at bottom
+  
+  // Text colors
+  static const Color lightTextColor = Colors.white; // For text on dark backgrounds
   
   static ThemeData get lightTheme {
     return ThemeData(
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: topGradientColor,
       colorScheme: ColorScheme.light(
         primary: primaryColor,
         secondary: accentColor,
@@ -77,7 +86,22 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
+          foregroundColor: lightTextColor,
+          textStyle: GoogleFonts.cairo(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+      
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          side: BorderSide(color: primaryColor),
           textStyle: GoogleFonts.cairo(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -95,7 +119,7 @@ class AppTheme {
       ),
       
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.white,
+        backgroundColor: topGradientColor,
         elevation: 0,
         iconTheme: IconThemeData(color: blackColor),
         titleTextStyle: GoogleFonts.cairo(
@@ -108,6 +132,95 @@ class AppTheme {
       drawerTheme: DrawerThemeData(
         backgroundColor: Colors.white,
       ),
+      
+      cardTheme: CardTheme(
+        color: Colors.white,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: primaryColor,
+      ),
+      
+      checkboxTheme: CheckboxThemeData(
+        fillColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return primaryColor;
+          }
+          return Colors.grey;
+        }),
+      ),
+      
+      radioTheme: RadioThemeData(
+        fillColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return primaryColor;
+          }
+          return Colors.grey;
+        }),
+      ),
+      
+      switchTheme: SwitchThemeData(
+        thumbColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return primaryColor;
+          }
+          return Colors.grey;
+        }),
+        trackColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.selected)) {
+            return primaryColor.withOpacity(0.5);
+          }
+          return Colors.grey.withOpacity(0.5);
+        }),
+      ),
+    );
+  }
+  
+  // Method to create the exact gradient background from the screenshot
+  static BoxDecoration get fullScreenGradient {
+    return BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          topGradientColor,
+          middleGradientColor,
+          bottomGradientColor,
+        ],
+        stops: [0.0, 0.5, 1.0],
+      ),
+    );
+  }
+  
+  // Method for splash screen or special pages gradient
+  static BoxDecoration get splashGradient {
+    return BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          topGradientColor,
+          middleGradientColor,
+          bottomGradientColor,
+        ],
+        stops: [0.0, 0.6, 1.0],
+      ),
+    );
+  }
+  
+  // Method for button gradients
+  static Gradient get buttonGradient {
+    return LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [
+        primaryColor,
+        bottomGradientColor,
+      ],
     );
   }
 }

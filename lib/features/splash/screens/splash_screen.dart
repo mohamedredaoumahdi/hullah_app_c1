@@ -92,22 +92,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo/Brand Name with shadow for better visibility
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.checkroom,
-                        size: 80,
-                        color: Colors.white,
+                    // Logo
+                    Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Image.asset(
+                        'assets/images/app_logo_2.png',
+                        width: 240,
+                        height: 240,
                       ),
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'تفصيل العباية',
+                      'حلة',
                       style: Theme.of(context).textTheme.displayLarge?.copyWith(
                         color: Colors.white,
                         fontSize: 40,
