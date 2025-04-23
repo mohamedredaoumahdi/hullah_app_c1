@@ -3,9 +3,10 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' ;
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../auth/providers/auth_provider.dart' as AuthProvider ;
+import '../../../core/widgets/rtl_scaffold.dart';
+import '../../auth/providers/auth_provider.dart' as AuthProvider;
 
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
@@ -17,6 +18,7 @@ class SupportScreen extends StatefulWidget {
 class _SupportScreenState extends State<SupportScreen> {
   final _formKey = GlobalKey<FormBuilderState>();
   bool _isSubmitting = false;
+  bool _hasChanges = false;
 
   @override
   Widget build(BuildContext context) {
@@ -24,12 +26,11 @@ class _SupportScreenState extends State<SupportScreen> {
     final user = authProvider.user;
     final userData = authProvider.userData;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('الدعم'),
-        centerTitle: true,
-      ),
+    return RTLScaffold(
+      title: 'الدعم',
+      showBackButton: true,
+      confirmOnBack: _hasChanges, // Show confirmation if form has changes
+      confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان البيانات غير المحفوظة.',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: FormBuilder(
@@ -37,6 +38,15 @@ class _SupportScreenState extends State<SupportScreen> {
           initialValue: {
             'name': userData?['name'] ?? '',
             'email': user?.email ?? '',
+          },
+          onChanged: () {
+            // Set flag to true when user starts changing form values
+            if (!_hasChanges && (_formKey.currentState?.fields['subject']?.value != null || 
+                _formKey.currentState?.fields['description']?.value != null)) {
+              setState(() {
+                _hasChanges = true;
+              });
+            }
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -184,6 +194,9 @@ class _SupportScreenState extends State<SupportScreen> {
         });
         
         if (mounted) {
+          // Reset change tracking
+          setState(() => _hasChanges = false);
+          
           // Clear the form
           _formKey.currentState?.reset();
           

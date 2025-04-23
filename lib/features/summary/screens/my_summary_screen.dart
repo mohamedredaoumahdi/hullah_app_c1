@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/summary_provider.dart';
 
 class MySummaryScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class MySummaryScreen extends StatefulWidget {
 class _MySummaryScreenState extends State<MySummaryScreen> {
   bool _isEditing = false;
   final _formKey = GlobalKey<FormBuilderState>();
+  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -35,29 +37,30 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     final summaryProvider = Provider.of<SummaryProvider>(context);
     
     if (summaryProvider.isLoading) {
-      return Scaffold(
+      return RTLScaffold(
+        title: 'ملخصي',
+        showBackButton: true,
         body: Center(child: CircularProgressIndicator()),
       );
     }
     
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('ملخصي'),
-        centerTitle: true,
-        actions: [
-          if (!_isEditing)
-            IconButton(
-              icon: Icon(Icons.edit),
-              onPressed: () => setState(() => _isEditing = true),
-            ),
-          if (_isEditing)
-            IconButton(
-              icon: Icon(Icons.check),
-              onPressed: _saveMeasurements,
-            ),
-        ],
-      ),
+    return RTLScaffold(
+      title: 'ملخصي',
+      showBackButton: true,
+      confirmOnBack: _isEditing || _hasChanges, // Show confirmation if editing
+      confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
+      actions: [
+        if (!_isEditing)
+          IconButton(
+            icon: Icon(Icons.edit),
+            onPressed: () => setState(() => _isEditing = true),
+          ),
+        if (_isEditing)
+          IconButton(
+            icon: Icon(Icons.check),
+            onPressed: _saveMeasurements,
+          ),
+      ],
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -142,7 +145,21 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
           padding: const EdgeInsets.all(16),
           child: FormBuilder(
             key: _formKey,
-            initialValue: measurements,
+            initialValue: {
+              'chest': measurements['chest']?.toString() ?? '',
+              'waist': measurements['waist']?.toString() ?? '',
+              'hips': measurements['hips']?.toString() ?? '',
+              'shoulder': measurements['shoulder']?.toString() ?? '',
+              'armLength': measurements['armLength']?.toString() ?? '',
+            },
+            onChanged: () {
+              // Set flag when changes are made
+              if (!_hasChanges) {
+                setState(() {
+                  _hasChanges = true;
+                });
+              }
+            },
             child: Column(
               children: [
                 _buildEditableField('chest', 'محيط الصدر'),
@@ -319,7 +336,10 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
         await summaryProvider.updateMeasurements(updatedMeasurements);
         
         if (mounted) {
-          setState(() => _isEditing = false);
+          setState(() {
+            _isEditing = false;
+            _hasChanges = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('تم تحديث القياسات بنجاح')),
           );

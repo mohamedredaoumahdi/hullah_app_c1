@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/summary_provider.dart';
 
 class FinalSummaryScreen extends StatelessWidget {
@@ -12,12 +13,9 @@ class FinalSummaryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final summaryProvider = Provider.of<SummaryProvider>(context);
     
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('الملخص النهائي'),
-        centerTitle: true,
-      ),
+    return RTLScaffold(
+      title: 'الملخص النهائي',
+      showBackButton: true,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(

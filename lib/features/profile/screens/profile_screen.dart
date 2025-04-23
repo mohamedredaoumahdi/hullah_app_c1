@@ -4,7 +4,9 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -24,18 +26,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final userData = authProvider.userData ?? {};
     
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('صفحتي'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.check : Icons.edit),
-            onPressed: _isEditing ? _saveProfile : () => setState(() => _isEditing = true),
-          ),
-        ],
-      ),
+    return RTLScaffold(
+      title: 'صفحتي',
+      showBackButton: true,
+      confirmOnBack: _isEditing, // Show confirmation when in editing mode
+      confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
+      actions: [
+        IconButton(
+          icon: Icon(_isEditing ? Icons.check : Icons.edit),
+          onPressed: _isEditing ? _saveProfile : () => setState(() => _isEditing = true),
+        ),
+      ],
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

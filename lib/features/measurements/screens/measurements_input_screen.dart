@@ -5,6 +5,7 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/measurements_provider.dart';
 
 class MeasurementsInputScreen extends StatefulWidget {
@@ -17,20 +18,28 @@ class MeasurementsInputScreen extends StatefulWidget {
 class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
   final _formKey = GlobalKey<FormBuilderState>();
   bool _isLoading = false;
+  bool _hasChanges = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('إدخال القياسات'),
-        centerTitle: true,
-      ),
+    return RTLScaffold(
+      title: 'إدخال القياسات',
+      showBackButton: true,
+      confirmOnBack: _hasChanges, // Show confirmation if form has changes
+      confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان القياسات المدخلة.',
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: FormBuilder(
             key: _formKey,
+            onChanged: () {
+              // Set flag to true when user starts changing form values
+              if (!_hasChanges) {
+                setState(() {
+                  _hasChanges = true;
+                });
+              }
+            },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -181,6 +190,7 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
         );
         
         if (mounted) {
+          setState(() => _hasChanges = false); // Reset changes flag after successful save
           // Navigate to body analysis screen
           context.go('/measurements/analysis');
         }

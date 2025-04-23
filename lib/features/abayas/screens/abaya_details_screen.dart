@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/abayas_provider.dart';
 import '../models/abaya_model.dart';
 
@@ -45,23 +46,27 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
+      return RTLScaffold(
+        title: 'تفاصيل العباية',
+        showBackButton: true,
+        showDrawer: false,
         body: Center(child: CircularProgressIndicator()),
       );
     }
     
     if (_abaya == null) {
-      return Scaffold(
+      return RTLScaffold(
+        title: 'تفاصيل العباية',
+        showBackButton: true,
+        showDrawer: false,
         body: Center(child: Text('العباية غير موجودة')),
       );
     }
     
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(_abaya!.model),
-        centerTitle: true,
-      ),
+    return RTLScaffold(
+      title: _abaya!.model,
+      showBackButton: true,
+      showDrawer: false, // No drawer on details page
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,10 +93,27 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
                       placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(),
                       ),
-                      errorWidget: (context, url, error) => Container(
-                        color: AppTheme.greyColor,
-                        child: Icon(Icons.error, color: Colors.red, size: 40),
-                      ),
+                      errorWidget: (context, url, error) {
+                        print('Image error: $error for URL: $url');
+                        return Container(
+                          color: AppTheme.greyColor,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error, color: Colors.red, size: 40),
+                              SizedBox(height: 8),
+                              Text(
+                                'فشل تحميل الصورة',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      // Additional headers for potential CORS issues
+                      httpHeaders: {
+                        'Accept': '*/*',
+                      },
                     );
                   },
                 );
@@ -182,31 +204,20 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: Offset(0, -2),
-            ),
-          ],
+      floatingActionButton: ElevatedButton(
+        onPressed: () {
+          final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+          final selectedIds = Set<String>.from(abayasProvider.selectedAbayaIds);
+          selectedIds.add(widget.abayaId);
+          abayasProvider.updateSelectedAbayas(selectedIds);
+          
+          context.pop();
+        },
+        style: ElevatedButton.styleFrom(
+          minimumSize: Size(double.infinity, 50),
+          padding: EdgeInsets.symmetric(vertical: 12),
         ),
-        child: SafeArea(
-          child: ElevatedButton(
-            onPressed: () {
-              final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-              final selectedIds = Set<String>.from(abayasProvider.selectedAbayaIds);
-              selectedIds.add(widget.abayaId);
-              abayasProvider.updateSelectedAbayas(selectedIds);
-              
-              context.pop();
-            },
-            child: Text('إضافة إلى الاختيارات'),
-          ),
-        ),
+        child: Text('إضافة إلى الاختيارات'),
       ),
     );
   }

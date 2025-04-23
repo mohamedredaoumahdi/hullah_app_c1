@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/measurements_provider.dart';
 
 class BodyAnalysisScreen extends StatelessWidget {
@@ -14,19 +15,18 @@ class BodyAnalysisScreen extends StatelessWidget {
     final bodyShape = measurementsProvider.bodyShape;
     
     if (measurements == null || bodyShape == null) {
-      return Scaffold(
+      return RTLScaffold(
+        title: 'تحليل الجسم',
+        showBackButton: true,
         body: Center(
           child: Text('لا توجد قياسات متوفرة'),
         ),
       );
     }
     
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('تحليل الجسم'),
-        centerTitle: true,
-      ),
+    return RTLScaffold(
+      title: 'تحليل الجسم',
+      showBackButton: true,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
