@@ -105,7 +105,7 @@ class AbayasProvider with ChangeNotifier {
   }
   
   Future<void> saveSelectedAbayasToSummary() async {
-    if (_user == null || _firestore == null) return;
+    if (_user == null) return;
     
     try {
       final List<Map<String, dynamic>> selectedAbayasData = [];
