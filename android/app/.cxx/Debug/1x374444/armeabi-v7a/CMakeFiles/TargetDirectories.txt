@@ -1,0 +1,2 @@
+/Users/MRO/Desktop/cursor/hullah_app/android/app/.cxx/Debug/1x374444/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/MRO/Desktop/cursor/hullah_app/android/app/.cxx/Debug/1x374444/armeabi-v7a/CMakeFiles/rebuild_cache.dir
