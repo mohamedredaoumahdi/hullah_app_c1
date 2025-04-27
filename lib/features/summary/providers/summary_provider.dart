@@ -30,7 +30,6 @@ class SummaryProvider with ChangeNotifier {
     }
   }
   
-  // This method allows the provider to be updated when auth changes
   void updateAuth(app_auth.AuthProvider authProvider) {
     _user = authProvider.user;
     if (_user != null) {
@@ -39,52 +38,53 @@ class SummaryProvider with ChangeNotifier {
       _summary = null;
       _selectedAbayas = [];
     }
-    notifyListeners();
   }
   
   Future<void> loadSummary() async {
     if (_user == null || _firestore == null) return;
     
-    _isLoading = true;
-    notifyListeners();
-    
     try {
-      // Load summary data
+      // Avoid calling setState during build
+      if (_isLoading) return;
+      
+      _isLoading = true;
+      
+      // Fetch summary data
       final summaryDoc = await _firestore!.collection('my summary').doc(_user!.uid).get();
-      if (summaryDoc.exists) {
-        _summary = summaryDoc.data();
-        
-        // Parse selected abayas
-        final selectedAbayasData = summaryDoc.data()?['selectedAbayas'] as List<dynamic>?;
-        if (selectedAbayasData != null) {
-          _selectedAbayas = selectedAbayasData
-              .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
-              .toList();
-        }
+      
+      // Parse selected abayas
+      final selectedAbayasData = summaryDoc.data()?['selectedAbayas'] as List<dynamic>?;
+      if (selectedAbayasData != null) {
+        _selectedAbayas = selectedAbayasData
+            .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
+            .toList();
       }
       
-      // Load measurements
+      // Fetch measurements
       final measurementsDoc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
-      if (measurementsDoc.exists) {
-        _summary = {
-          ..._summary ?? {},
-          'measurements': measurementsDoc.data(),
-        };
-      }
       
-      // Load user profile
+      // Fetch profile
       final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
-      if (profileDoc.exists) {
-        _summary = {
-          ..._summary ?? {},
-          'profile': profileDoc.data(),
-        };
-      }
+      
+      // Compile summary
+      _summary = {
+        'measurements': measurementsDoc.data() ?? {},
+        'profile': profileDoc.data() ?? {},
+        'selectedAbayas': selectedAbayasData ?? [],
+      };
+      
+      _isLoading = false;
+      
+      // Use a microtask to avoid setState during build
+      Future.microtask(() {
+        notifyListeners();
+      });
     } catch (e) {
       print('Error loading summary: $e');
-    } finally {
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() {
+        notifyListeners();
+      });
     }
   }
   

@@ -6,8 +6,49 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/summary_provider.dart';
 
-class FinalSummaryScreen extends StatelessWidget {
+class FinalSummaryScreen extends StatefulWidget {
   const FinalSummaryScreen({super.key});
+
+  @override
+  State<FinalSummaryScreen> createState() => _FinalSummaryScreenState();
+}
+
+class _FinalSummaryScreenState extends State<FinalSummaryScreen> {
+  bool _hasChanges = false;
+
+  Future<bool> _confirmSubmission() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد الطلب النهائي'),
+        content: Text('هل أنت متأكدة من إرسال الطلب؟ لا يمكنك التراجع بعد هذه الخطوة.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('تأكيد', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _submitFinalOrder() async {
+    // Confirm submission first
+    final confirmed = await _confirmSubmission();
+    
+    if (confirmed) {
+      setState(() {
+        _hasChanges = false;
+      });
+      
+      // Navigate to thank you screen
+      context.go('/thank-you');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,6 +57,9 @@ class FinalSummaryScreen extends StatelessWidget {
     return RTLScaffold(
       title: 'الملخص النهائي',
       showBackButton: true,
+      confirmOnBack: _hasChanges,
+      fallbackRoute: '/summary',
+      confirmationMessage: 'هل أنت متأكدة من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -49,7 +93,12 @@ class FinalSummaryScreen extends StatelessWidget {
             
             // Final Submission Button
             ElevatedButton(
-              onPressed: () => _submitFinalOrder(context),
+              onPressed: () {
+                setState(() {
+                  _hasChanges = true;
+                });
+                _submitFinalOrder();
+              },
               style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 16),
               ),
@@ -187,11 +236,5 @@ class FinalSummaryScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _submitFinalOrder(BuildContext context) async {
-    // In a real app, this would submit the order to a backend system
-    // For now, we'll just navigate to the thank you screen
-    context.go('/thank-you');
   }
 }

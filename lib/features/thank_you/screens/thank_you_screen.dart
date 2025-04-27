@@ -1,8 +1,7 @@
-// lib/features/thank_you/screens/thank_you_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 
 class ThankYouScreen extends StatefulWidget {
   const ThankYouScreen({super.key});
@@ -60,8 +59,9 @@ class _ThankYouScreenState extends State<ThankYouScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.primaryColor,
+    return RTLScaffold(
+      title: 'شكراً لك',
+      showBackButton: false,
       body: SafeArea(
         child: AnimatedBuilder(
           animation: _controller,
@@ -92,7 +92,7 @@ class _ThankYouScreenState extends State<ThankYouScreen> with SingleTickerProvid
                     Text(
                       'شكراً لك!',
                       style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        color: Colors.white,
+                        color: AppTheme.primaryColor,
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                       ),
@@ -103,22 +103,22 @@ class _ThankYouScreenState extends State<ThankYouScreen> with SingleTickerProvid
                       child: Text(
                         'تم استلام طلبك بنجاح. سيتم التواصل معك قريباً لتأكيد التفاصيل.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.white,
                           fontSize: 18,
+                          color: Colors.black87,
                         ),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 48),
                     CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppTheme.primaryColor,
                       strokeWidth: 3,
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'سيتم تحويلك إلى الصفحة الرئيسية...',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.grey[600],
                         fontSize: 14,
                       ),
                     ),

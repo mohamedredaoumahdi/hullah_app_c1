@@ -20,6 +20,28 @@ class _SupportScreenState extends State<SupportScreen> {
   bool _isSubmitting = false;
   bool _hasChanges = false;
 
+  Future<bool> _confirmExit() async {
+    if (!_hasChanges) return true;
+    
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد الخروج'),
+        content: Text('هل أنت متأكد من الخروج؟ سيتم فقدان البيانات غير المحفوظة.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('خروج', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider.AuthProvider>(context);
@@ -29,7 +51,8 @@ class _SupportScreenState extends State<SupportScreen> {
     return RTLScaffold(
       title: 'الدعم',
       showBackButton: true,
-      confirmOnBack: _hasChanges, // Show confirmation if form has changes
+      confirmOnBack: _hasChanges,
+      fallbackRoute: '/home',
       confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان البيانات غير المحفوظة.',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -176,7 +199,10 @@ class _SupportScreenState extends State<SupportScreen> {
 
   Future<void> _submitSupportRequest() async {
     if (_formKey.currentState?.saveAndValidate() ?? false) {
-      setState(() => _isSubmitting = true);
+      setState(() {
+        _isSubmitting = true;
+        _hasChanges = false;
+      });
       
       final values = _formKey.currentState!.value;
       final user = FirebaseAuth.instance.currentUser;
@@ -194,15 +220,16 @@ class _SupportScreenState extends State<SupportScreen> {
         });
         
         if (mounted) {
-          // Reset change tracking
-          setState(() => _hasChanges = false);
-          
           // Clear the form
           _formKey.currentState?.reset();
           
-          // According to requirements, don't show confirmation message
-          // Just navigate back
-          Navigator.pop(context);
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('تم إرسال طلب الدعم بنجاح'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {

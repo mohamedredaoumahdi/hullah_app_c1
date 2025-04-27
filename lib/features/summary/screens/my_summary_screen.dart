@@ -24,12 +24,36 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSummary();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSummary();
+    });
   }
 
-  Future<void> _loadSummary() async {
+  void _loadSummary() {
     final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-    await summaryProvider.loadSummary();
+    summaryProvider.loadSummary();
+  }
+
+  Future<bool> _showHomeConfirmationDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد العودة للصفحة الرئيسية'),
+        content: Text(_hasChanges 
+          ? 'هل أنت متأكدة من العودة للصفحة الرئيسية؟ سيتم فقدان التغييرات غير المحفوظة.' 
+          : 'هل أنت متأكدة من العودة للصفحة الرئيسية؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('عودة', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   @override
@@ -40,6 +64,8 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
       return RTLScaffold(
         title: 'ملخصي',
         showBackButton: true,
+        confirmOnBack: false,
+        fallbackRoute: '/home',
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -47,8 +73,9 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     return RTLScaffold(
       title: 'ملخصي',
       showBackButton: true,
-      confirmOnBack: _isEditing || _hasChanges, // Show confirmation if editing
-      confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
+      confirmOnBack: _hasChanges || _isEditing,
+      fallbackRoute: '/home',
+      confirmationMessage: 'هل أنت متأكدة من العودة للصفحة الرئيسية؟ سيتم فقدان التغييرات غير المحفوظة.',
       actions: [
         if (!_isEditing)
           IconButton(
@@ -66,17 +93,17 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // User Information
+            // User Information Section
             _buildSectionHeader('معلومات العميلة'),
             _buildUserInfoCard(summaryProvider),
             const SizedBox(height: 24),
             
-            // Measurements
+            // Measurements Section
             _buildSectionHeader('القياسات'),
             _buildMeasurementsCard(summaryProvider),
             const SizedBox(height: 24),
             
-            // Selected Abayas
+            // Selected Abayas Section
             _buildSectionHeader('العبايات المختارة'),
             _buildSelectedAbayasSection(summaryProvider),
             const SizedBox(height: 24),
@@ -102,6 +129,62 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     );
   }
 
+  Future<void> _saveMeasurements() async {
+    if (_formKey.currentState?.saveAndValidate() ?? false) {
+      final values = _formKey.currentState!.value;
+      final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+      
+      try {
+        final updatedMeasurements = {
+          'chest': double.parse(values['chest']),
+          'waist': double.parse(values['waist']),
+          'hips': double.parse(values['hips']),
+          'shoulder': double.parse(values['shoulder']),
+          'armLength': double.parse(values['armLength']),
+        };
+        
+        await summaryProvider.updateMeasurements(updatedMeasurements);
+        
+        if (mounted) {
+          setState(() {
+            _isEditing = false;
+            _hasChanges = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تم تحديث القياسات بنجاح')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('فشل في تحديث القياسات')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _generatePDF() async {
+    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+    
+    try {
+      final file = await summaryProvider.generatePDF();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم إنشاء ملف PDF بنجاح')),
+        );
+        // Open the PDF file or share it
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل في إنشاء ملف PDF')),
+        );
+      }
+    }
+  }
+  
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -136,6 +219,30 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     );
   }
 
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Implement other methods as needed
   Widget _buildMeasurementsCard(SummaryProvider provider) {
     final measurements = provider.summary?['measurements'] ?? {};
     
@@ -296,64 +403,6 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey[600],
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _saveMeasurements() async {
-    if (_formKey.currentState?.saveAndValidate() ?? false) {
-      final values = _formKey.currentState!.value;
-      final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-      
-      try {
-        final updatedMeasurements = {
-          'chest': double.parse(values['chest']),
-          'waist': double.parse(values['waist']),
-          'hips': double.parse(values['hips']),
-          'shoulder': double.parse(values['shoulder']),
-          'armLength': double.parse(values['armLength']),
-        };
-        
-        await summaryProvider.updateMeasurements(updatedMeasurements);
-        
-        if (mounted) {
-          setState(() {
-            _isEditing = false;
-            _hasChanges = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('تم تحديث القياسات بنجاح')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('فشل في تحديث القياسات')),
-          );
-        }
-      }
-    }
-  }
-
   Future<void> _confirmDeleteAbaya(String abayaId, SummaryProvider provider) async {
     final result = await showDialog<bool>(
       context: context,
@@ -378,28 +427,13 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     if (result == true && mounted) {
       final updatedAbayas = List<AbayaModel>.from(provider.selectedAbayas)
         ..removeWhere((abaya) => abaya.id == abayaId);
-      await provider.updateSummary(selectedAbayas: updatedAbayas);
-    }
-  }
-
-  Future<void> _generatePDF() async {
-    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-    
-    try {
-      final file = await summaryProvider.generatePDF();
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إنشاء ملف PDF بنجاح')),
-        );
-        // Open the PDF file or share it
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل في إنشاء ملف PDF')),
-        );
-      }
+      await provider.updateSummary(selectedAbayas: updatedAbayas);
+
+      // Set hasChanges to true when abayas are modified
+      setState(() {
+        _hasChanges = true;
+      });
     }
   }
 }

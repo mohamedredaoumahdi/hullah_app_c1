@@ -6,7 +6,6 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
-import '../../../core/utils/navigation_utils.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -20,10 +19,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormBuilderState>();
   bool _isEditing = false;
   bool _isLoading = false;
+  bool _hasChanges = false;
+
+  Future<bool> _confirmExit() async {
+    if (!_hasChanges) return true;
+    
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد الخروج'),
+        content: Text('هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('خروج', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
 
   Future<void> _saveProfile() async {
     if (_formKey.currentState?.saveAndValidate() ?? false) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+      });
       
       final values = _formKey.currentState!.value;
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -40,6 +64,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             _isEditing = false;
             _isLoading = false;
+            _hasChanges = false;
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -65,18 +90,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return RTLScaffold(
       title: 'صفحتي',
       showBackButton: true,
-      confirmOnBack: _isEditing, // Show confirmation when in editing mode
+      confirmOnBack: _hasChanges,
+      fallbackRoute: '/home',
       confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
-      onBackPressed: () {
-        // This ensures we save any state or do any cleanup needed
-        if (_isEditing) {
-          setState(() => _isEditing = false);
-        }
-      },
       actions: [
         IconButton(
           icon: Icon(_isEditing ? Icons.check : Icons.edit),
-          onPressed: _isEditing ? _saveProfile : () => setState(() => _isEditing = true),
+          onPressed: _isEditing ? _saveProfile : () => setState(() {
+            _isEditing = true;
+            _hasChanges = true;
+          }),
         ),
       ],
       body: SafeArea(
@@ -89,6 +112,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'phone': userData['phone'] ?? '',
               'height': userData['height']?.toString() ?? '',
               'dateOfBirth': userData['dateOfBirth']?.toDate() ?? DateTime.now(),
+            },
+            onChanged: () {
+              // Set flag to true when user starts changing form values
+              if (!_hasChanges) {
+                setState(() {
+                  _hasChanges = true;
+                });
+              }
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

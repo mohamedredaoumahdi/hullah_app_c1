@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
-import '../../../core/utils/navigation_utils.dart';
 import '../providers/abayas_provider.dart';
 import '../models/abaya_model.dart';
 
@@ -25,6 +24,7 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
   AbayaModel? _abaya;
   bool _isLoading = true;
   int _currentImageIndex = 0;
+  bool _wasAbayaAdded = false;
 
   @override
   void initState() {
@@ -44,6 +44,46 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
     }
   }
 
+  Future<bool> _showExitConfirmationDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد الخروج'),
+        content: Text(_wasAbayaAdded 
+          ? 'هل أنت متأكدة من الخروج؟' 
+          : 'هل أنت متأكدة من الخروج دون إضافة العباية؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('خروج', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  void _addAbayaToSelection() {
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+    final selectedIds = Set<String>.from(abayasProvider.selectedAbayaIds);
+    selectedIds.add(widget.abayaId);
+    abayasProvider.updateSelectedAbayas(selectedIds);
+    
+    setState(() {
+      _wasAbayaAdded = true;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تمت إضافة العباية إلى اختياراتك'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -51,6 +91,8 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
         title: 'تفاصيل العباية',
         showBackButton: true,
         showDrawer: false,
+        confirmOnBack: false,
+        fallbackRoute: '/abayas/selection',
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -60,6 +102,8 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
         title: 'تفاصيل العباية',
         showBackButton: true,
         showDrawer: false,
+        confirmOnBack: false,
+        fallbackRoute: '/abayas/selection',
         body: Center(child: Text('العباية غير موجودة')),
       );
     }
@@ -67,12 +111,10 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
     return RTLScaffold(
       title: _abaya!.model,
       showBackButton: true,
-      showDrawer: false, // No drawer on details page
-      onBackPressed: () {
-        // Update selected abayas before popping
-        final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-        abayasProvider.updateSelectedAbayas(Set<String>.from(abayasProvider.selectedAbayaIds));
-      },
+      showDrawer: false,
+      confirmOnBack: !_wasAbayaAdded,
+      fallbackRoute: '/abayas/selection',
+      confirmationMessage: 'هل أنت متأكدة من الخروج دون إضافة العباية؟',
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,7 +158,6 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
                           ),
                         );
                       },
-                      // Additional headers for potential CORS issues
                       httpHeaders: {
                         'Accept': '*/*',
                       },
@@ -211,14 +252,7 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
         ),
       ),
       floatingActionButton: ElevatedButton(
-        onPressed: () {
-          final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-          final selectedIds = Set<String>.from(abayasProvider.selectedAbayaIds);
-          selectedIds.add(widget.abayaId);
-          abayasProvider.updateSelectedAbayas(selectedIds);
-          
-          context.safeNavigateBack();
-        },
+        onPressed: _addAbayaToSelection,
         style: ElevatedButton.styleFrom(
           minimumSize: Size(double.infinity, 50),
           padding: EdgeInsets.symmetric(vertical: 12),
