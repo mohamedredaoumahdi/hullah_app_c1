@@ -80,19 +80,65 @@ class AbayaModel {
     return urls;
   }
   
-  // Get a more accessible version of the image URL
+  // IMPROVED: Enhanced method to handle various Google Drive URL formats
   String getAccessibleImageUrl(String originalUrl) {
-    if (originalUrl.contains('drive.google.com') && originalUrl.contains('id=')) {
-      // Extract the file ID from the Google Drive URL
-      final regex = RegExp(r'id=([^&]+)');
+    // Skip processing if empty
+    if (originalUrl.isEmpty) {
+      return 'https://via.placeholder.com/400x600?text=No+Image';
+    }
+    
+    // Handle data URLs (base64)
+    if (originalUrl.startsWith('data:')) {
+      return originalUrl;
+    }
+    
+    // Handle different Google Drive URL formats
+    
+    // Format 1: https://drive.google.com/file/d/FILE_ID/view
+    if (originalUrl.contains('drive.google.com/file/d/')) {
+      final regex = RegExp(r'file/d/([^/]+)');
       final match = regex.firstMatch(originalUrl);
       if (match != null) {
         final fileId = match.group(1);
-        // Use the thumbnail URL format which is more reliable
         return 'https://drive.google.com/thumbnail?id=$fileId&sz=w800';
       }
     }
-    return originalUrl;
+    
+    // Format 2: https://drive.google.com/open?id=FILE_ID
+    if (originalUrl.contains('drive.google.com/open?id=')) {
+      final regex = RegExp(r'open\?id=([^&]+)');
+      final match = regex.firstMatch(originalUrl);
+      if (match != null) {
+        final fileId = match.group(1);
+        return 'https://drive.google.com/thumbnail?id=$fileId&sz=w800';
+      }
+    }
+    
+    // Format 3: https://drive.google.com/uc?id=FILE_ID
+    if (originalUrl.contains('drive.google.com/uc?')) {
+      final regex = RegExp(r'[?&]id=([^&]+)');
+      final match = regex.firstMatch(originalUrl);
+      if (match != null) {
+        final fileId = match.group(1);
+        return 'https://drive.google.com/thumbnail?id=$fileId&sz=w800';
+      }
+    }
+    
+    // Format 4: Already in thumbnail format but might need size parameter
+    if (originalUrl.contains('drive.google.com/thumbnail')) {
+      if (!originalUrl.contains('&sz=')) {
+        return originalUrl + '&sz=w800';
+      }
+      return originalUrl;
+    }
+    
+    // Default: try to use as-is if it's a regular URL
+    if (originalUrl.startsWith('http')) {
+      return originalUrl;
+    }
+    
+    // Fallback for unrecognized formats
+    return 'https://via.placeholder.com/400x600?text=Invalid+Image+URL';
   }
   
   // Getter for the main image URL in accessible format

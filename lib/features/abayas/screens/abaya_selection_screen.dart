@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hullah_app/core/widgets/image_diagnostic_widget.dart';
 import 'package:hullah_app/features/abayas/models/abaya_model.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/abayas_provider.dart';
 import '../../measurements/providers/measurements_provider.dart';
+import '../../../core/widgets/reliable_network_image.dart';
 
 class AbayaSelectionScreen extends StatefulWidget {
   const AbayaSelectionScreen({super.key});
@@ -30,6 +32,17 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
       _loadAbayas();
     });
   }
+
+  void _showImageDiagnosticScreen(BuildContext context, AbayaModel abaya) {
+  // Show the image diagnostic screen
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => ImageDiagnosticWidget(
+        originalUrl: abaya.image1Url,
+      ),
+    ),
+  );
+}
 
   Future<void> _loadAbayas() async {
     if (!mounted) return;
@@ -240,70 +253,75 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                       ),
                       itemCount: abayasProvider.recommendedAbayas.length,
                       itemBuilder: (context, index) {
-                        final abaya = abayasProvider.recommendedAbayas[index];
-                        final isSelected = _selectedAbayas.contains(abaya.id);
-                        
-                        return GestureDetector(
-                          onTap: () => _toggleSelection(abaya.id),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppTheme.accentColor
-                                    : Colors.transparent,
-                                width: 3,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: _buildAbayaImage(abaya, index),
-                                      ),
-                                      if (_debugMode)
-                                        Positioned(
-                                          bottom: 0,
-                                          right: 0,
-                                          child: Container(
-                                            padding: EdgeInsets.all(4),
-                                            color: Colors.black54,
-                                            child: Text(
-                                              'ID: ${abaya.id.substring(0, min(abaya.id.length, 8))}',
-                                              style: TextStyle(color: Colors.white, fontSize: 10),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        abaya.model,
-                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${abaya.fabric} - ${abaya.color}',
-                                        style: Theme.of(context).textTheme.bodyMedium,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+  final abaya = abayasProvider.recommendedAbayas[index];
+  final isSelected = _selectedAbayas.contains(abaya.id);
+  
+  return InkWell(
+    onTap: () => _toggleSelection(abaya.id),
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected
+              ? AppTheme.accentColor
+              : Colors.transparent,
+          width: 3,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _buildAbayaImage(abaya, index),
+                ),
+                if (isSelected)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.check, color: Colors.white, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  abaya.model,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${abaya.fabric} - ${abaya.color}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
                     ),
           ),
           
@@ -366,60 +384,17 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
   }
   
   Widget _buildAbayaImage(AbayaModel abaya, int index) {
-    if (_debugMode) {
-      print('⚙️ Building image for index $index: ${abaya.image1Url}');
-    }
-    
-    // Use the accessible image URL
-    final imageUrl = abaya.accessibleImage1Url;
-    
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      fit: BoxFit.cover,
-      placeholder: (context, url) => Container(
-        color: Colors.grey[200],
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
-      ),
-      errorWidget: (context, url, error) {
-        if (_debugMode) {
-          print('❌ Error loading image at index $index: $error');
-          print('❌ URL attempted: $url');
-        }
-        
-        return Container(
-          color: Colors.grey[300],
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_not_supported, size: 40, color: Colors.grey[600]),
-              SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Text(
-                  abaya.model,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      maxHeightDiskCache: 500,
-      maxWidthDiskCache: 500,
-      // Implement special headers if needed
-      httpHeaders: {
-        'Accept': '*/*',
-      },
-    );
+  if (_debugMode) {
+    print('⚙️ Building image for index $index: ${abaya.model}');
   }
+  
+  return ReliableNetworkImage(
+    imageUrl: abaya.accessibleImage1Url,
+    altText: abaya.model,
+    showErrors: _debugMode, // Only show detailed errors in debug mode
+    debug: _debugMode,
+  );
+}
   
   // Helper function
   int min(int a, int b) => a < b ? a : b;
