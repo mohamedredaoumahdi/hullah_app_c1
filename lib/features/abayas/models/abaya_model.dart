@@ -79,4 +79,34 @@ class AbayaModel {
     if (image7Url != null) urls.add(image7Url!);
     return urls;
   }
+  
+  // Get a more accessible version of the image URL
+  String getAccessibleImageUrl(String originalUrl) {
+    if (originalUrl.contains('drive.google.com') && originalUrl.contains('id=')) {
+      // Extract the file ID from the Google Drive URL
+      final regex = RegExp(r'id=([^&]+)');
+      final match = regex.firstMatch(originalUrl);
+      if (match != null) {
+        final fileId = match.group(1);
+        // Use the thumbnail URL format which is more reliable
+        return 'https://drive.google.com/thumbnail?id=$fileId&sz=w800';
+      }
+    }
+    return originalUrl;
+  }
+  
+  // Getter for the main image URL in accessible format
+  String get accessibleImage1Url => getAccessibleImageUrl(image1Url);
+  
+  // Get all image URLs in accessible format
+  List<String> get accessibleImageUrls {
+    final List<String> urls = [accessibleImage1Url];
+    if (image2Url != null) urls.add(getAccessibleImageUrl(image2Url!));
+    if (image3Url != null) urls.add(getAccessibleImageUrl(image3Url!));
+    if (image4Url != null) urls.add(getAccessibleImageUrl(image4Url!));
+    if (image5Url != null) urls.add(getAccessibleImageUrl(image5Url!));
+    if (image6Url != null) urls.add(getAccessibleImageUrl(image6Url!));
+    if (image7Url != null) urls.add(getAccessibleImageUrl(image7Url!));
+    return urls;
+  }
 }

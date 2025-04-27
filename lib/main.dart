@@ -121,6 +121,7 @@ class _AppInitializerState extends State<AppInitializer> {
         home: Scaffold(
           backgroundColor: AppTheme.primaryColor,
           drawerEnableOpenDragGesture: false,
+          endDrawerEnableOpenDragGesture: false,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
