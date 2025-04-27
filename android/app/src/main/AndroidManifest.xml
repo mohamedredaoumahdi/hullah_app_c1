@@ -23,7 +23,8 @@
         android:allowBackup="true"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:enableOnBackInvokedCallback="true">
         
         <activity
             android:name=".MainActivity"
