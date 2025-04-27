@@ -19,9 +19,12 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
   final _formKey = GlobalKey<FormBuilderState>();
   bool _isLoading = false;
   bool _hasChanges = false;
+  String? _errorMessage;
 
   @override
   Widget build(BuildContext context) {
+    final measurementsProvider = Provider.of<MeasurementsProvider>(context);
+    
     return RTLScaffold(
       title: 'إدخال القياسات',
       showBackButton: true,
@@ -48,7 +51,48 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
                   style: Theme.of(context).textTheme.bodyLarge,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                
+                // Display error message if available
+                if (_errorMessage != null || measurementsProvider.errorMessage != null)
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          _errorMessage ?? measurementsProvider.errorMessage ?? 'حدث خطأ',
+                          style: TextStyle(color: Colors.red.shade800),
+                          textAlign: TextAlign.center,
+                        ),
+                        if ((_errorMessage ?? measurementsProvider.errorMessage ?? '').contains('timeout'))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'يحتاج الخادم المستضاف إلى بضع دقائق للبدء إذا كان خاملاً. يرجى المحاولة مرة أخرى.',
+                              style: TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.red.shade800,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _errorMessage = null);
+                            measurementsProvider.clearError();
+                          },
+                          child: Text('حسناً'),
+                        ),
+                      ],
+                    ),
+                  ),
                 
                 // Chest Measurement
                 FormBuilderTextField(
@@ -150,10 +194,18 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
                 ),
                 const SizedBox(height: 32),
                 
+                // Submit Button
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _saveMeasurements,
-                  child: _isLoading
-                      ? SpinKitCircle(color: Colors.white, size: 24)
+                  onPressed: _isLoading || measurementsProvider.isLoading ? null : _saveMeasurements,
+                  child: _isLoading || measurementsProvider.isLoading
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SpinKitCircle(color: Colors.white, size: 24),
+                            SizedBox(width: 16),
+                            Text('جاري المعالجة...'),
+                          ],
+                        )
                       : Text('حفظ القياسات'),
                 ),
                 const SizedBox(height: 16),
@@ -165,6 +217,39 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
+                
+                // API information note
+                const SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'يتم استخدام خادم API مستضاف خارجياً لتحليل القياسات',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'قد يستغرق بدء تشغيل الخادم بضع دقائق إذا كان خاملاً',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.blue.shade800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -175,12 +260,45 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
   
   Future<void> _saveMeasurements() async {
     if (_formKey.currentState?.saveAndValidate() ?? false) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
       
       final values = _formKey.currentState!.value;
       final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
       
       try {
+        // Show loading dialog with more information
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SpinKitCircle(color: AppTheme.primaryColor, size: 50),
+                  SizedBox(height: 20),
+                  Text(
+                    'جاري معالجة القياسات...',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'يرجى الانتظار بينما نقوم بتحليل القياسات باستخدام API. قد يستغرق الأمر وقتًا إذا كان الخادم يبدأ تشغيله.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+        
         await measurementsProvider.saveMeasurements(
           chest: double.parse(values['chest']),
           waist: double.parse(values['waist']),
@@ -190,16 +308,31 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
         );
         
         if (mounted) {
-          setState(() => _hasChanges = false); // Reset changes flag after successful save
+          Navigator.pop(context); // Close the loading dialog
+          setState(() {
+            _hasChanges = false;
+            _isLoading = false;
+          });
+          
           // Navigate to body analysis screen
           context.go('/measurements/analysis');
         }
       } catch (e) {
         if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('فشل حفظ القياسات. الرجاء المحاولة مرة أخرى.')),
-          );
+          // Close the loading dialog if it's open
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+          
+          setState(() {
+            _isLoading = false;
+            _errorMessage = e.toString();
+            
+            // Handle specific error messages
+            if (e.toString().contains('timeout')) {
+              _errorMessage = 'انتهت مهلة الاتصال. قد يستغرق بدء تشغيل الخادم بعض الوقت، يرجى المحاولة مرة أخرى.';
+            }
+          });
         }
       }
     }

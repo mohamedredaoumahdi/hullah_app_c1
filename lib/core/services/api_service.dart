@@ -48,10 +48,28 @@ class ApiService {
       
       // Add manual measurements if provided
       if (manualMeasurements != null) {
-        request.fields['manual_measurements'] = jsonEncode(manualMeasurements);
+        // Convert the field names to match what the API expects
+        final apiMeasurements = {
+          'chest': manualMeasurements['chest'],
+          'waist': manualMeasurements['waist'],
+          'hips': manualMeasurements['hips'],
+          'bust': manualMeasurements['chest'], // Add bust for API compatibility
+          'shoulder': manualMeasurements['shoulder'],
+          'armLength': manualMeasurements['armLength'],
+          'height': userHeightCm,
+        };
+        
+        request.fields['manual_measurements'] = jsonEncode(apiMeasurements);
       }
       
-      var streamedResponse = await request.send();
+      // Set a longer timeout for the request
+      var streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          throw Exception('Connection timeout. The server might be starting up, please try again.');
+        },
+      );
+      
       var response = await http.Response.fromStream(streamedResponse);
       
       if (response.statusCode == 200) {
@@ -65,6 +83,24 @@ class ApiService {
             result['body_analysis']['type'] = bodyTypeTranslations[bodyType] ?? bodyType;
           }
           
+          // Map API measurements to our app format if necessary
+          var measurements = result['measurements'];
+          if (measurements != null) {
+            // If the API returned 'bust' instead of 'chest', map it
+            if (measurements['bust'] != null && measurements['chest'] == null) {
+              measurements['chest'] = measurements['bust'];
+            }
+            
+            // Convert any missing fields to our expected format
+            if (manualMeasurements != null) {
+              for (var key in manualMeasurements.keys) {
+                if (measurements[key] == null) {
+                  measurements[key] = manualMeasurements[key];
+                }
+              }
+            }
+          }
+          
           return result;
         }
         throw Exception('No results returned from API');
@@ -72,6 +108,7 @@ class ApiService {
         var error = jsonDecode(response.body);
         throw Exception('Validation error: ${error['detail']}');
       } else {
+        print('API error response: ${response.body}');
         throw Exception('Failed to process measurements: ${response.statusCode}');
       }
     } catch (e) {
@@ -81,10 +118,10 @@ class ApiService {
   }
   
   // Get abaya recommendations based on body type
-  static Future<List<Map<String, dynamic>>> recommendAbayas(String bodyType) async {
+  static Future<List<Map<String, dynamic>>> recommendAbayas(String bodyShape) async {
     try {
       // Convert Arabic body type to English for API request
-      String englishBodyType = bodyTypeToEnglish[bodyType] ?? bodyType;
+      String englishBodyType = bodyTypeToEnglish[bodyShape] ?? bodyShape;
       
       final response = await http.post(
         Uri.parse('$baseUrl${ApiConstants.recommendAbaya}'),
@@ -95,6 +132,11 @@ class ApiService {
         body: jsonEncode({
           'body_type': englishBodyType,
         }),
+      ).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          throw Exception('Connection timeout. The server might be starting up, please try again.');
+        },
       );
       
       if (response.statusCode == 200) {
@@ -114,6 +156,7 @@ class ApiService {
         var error = jsonDecode(response.body);
         throw Exception('Validation error: ${error['detail']}');
       } else {
+        print('API error response: ${response.body}');
         throw Exception('Failed to get recommendations: ${response.statusCode}');
       }
     } catch (e) {

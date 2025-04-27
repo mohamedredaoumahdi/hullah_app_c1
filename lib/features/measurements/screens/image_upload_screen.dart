@@ -1,5 +1,3 @@
-// lib/features/measurements/screens/image_upload_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +20,7 @@ class ImageUploadScreen extends StatefulWidget {
 class _ImageUploadScreenState extends State<ImageUploadScreen> {
   File? _selectedImage;
   bool _isLoading = false;
+  String? _errorMessage;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _pickImage(ImageSource source) async {
@@ -30,9 +29,13 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
       if (image != null) {
         setState(() {
           _selectedImage = File(image.path);
+          _errorMessage = null;
         });
       }
     } catch (e) {
+      setState(() {
+        _errorMessage = 'فشل في اختيار الصورة';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('فشل في اختيار الصورة')),
       );
@@ -45,11 +48,37 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     setState(() => _isLoading = true);
     
     // Show loading screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const LoadingScreen(message: 'يتم التحليل...'),
-      ),
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (BuildContext context) {
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: Container(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SpinKitCircle(color: AppTheme.primaryColor, size: 50),
+                SizedBox(height: 20),
+                Text(
+                  'يتم التحليل...',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'يرجى الانتظار بينما نقوم بتحليل الصورة. قد يستغرق الأمر بعض الوقت إذا كان الخادم يبدأ تشغيله.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
     
     try {
@@ -75,9 +104,25 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Dismiss loading dialog
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+          if (e.toString().contains('timeout')) {
+            _errorMessage = 'انتهت مهلة الاتصال. قد يستغرق بدء تشغيل الخادم بعض الوقت، يرجى المحاولة مرة أخرى.';
+          }
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل في تحليل الصورة. الرجاء المحاولة مرة أخرى.')),
+          SnackBar(
+            content: Text(_errorMessage ?? 'فشل في تحليل الصورة. الرجاء المحاولة مرة أخرى.'),
+            duration: Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'حسناً',
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ),
         );
       }
     }
@@ -139,6 +184,38 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
               ),
               const SizedBox(height: 24),
               
+              if (_errorMessage != null)
+                Container(
+                  padding: EdgeInsets.all(12),
+                  margin: EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Colors.red.shade800),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (_errorMessage!.contains('timeout'))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            'يحتاج الخادم المستضاف إلى بضع دقائق للبدء إذا كان خاملاً. يرجى المحاولة مرة أخرى.',
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              color: Colors.red.shade800,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              
               Expanded(
                 child: _selectedImage != null
                     ? Column(
@@ -154,7 +231,10 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            onPressed: () => setState(() => _selectedImage = null),
+                            onPressed: () => setState(() {
+                              _selectedImage = null;
+                              _errorMessage = null;
+                            }),
                             icon: Icon(Icons.refresh),
                             label: Text('اختر صورة أخرى'),
                             style: ElevatedButton.styleFrom(
@@ -211,6 +291,42 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
                     ? SpinKitCircle(color: Colors.white, size: 24)
                     : Text('تحليل الصورة'),
               ),
+              
+              // API information note
+              if (_selectedImage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'يتم استخدام خادم API مستضاف خارجياً لتحليل الصورة',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'قد يستغرق بدء تشغيل الخادم بضع دقائق إذا كان خاملاً',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.blue.shade800,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

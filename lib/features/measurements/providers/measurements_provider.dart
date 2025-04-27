@@ -13,11 +13,15 @@ class MeasurementsProvider with ChangeNotifier {
   String? _bodyShape;
   double? _userHeight;
   Map<String, dynamic>? _analysisResults;
+  bool _isLoading = false;
+  String? _errorMessage;
   
   Map<String, dynamic>? get measurements => _measurements;
   String? get bodyShape => _bodyShape;
   double? get userHeight => _userHeight;
   Map<String, dynamic>? get analysisResults => _analysisResults;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
   
   MeasurementsProvider() {
     _initializeFirebase();
@@ -52,7 +56,8 @@ class MeasurementsProvider with ChangeNotifier {
     try {
       final doc = await _firestore!.collection('Registration').doc(_user!.uid).get();
       if (doc.exists && doc.data()?['height'] != null) {
-        _userHeight = doc.data()!['height'] as double;
+        _userHeight = doc.data()!['height'] is int ? 
+          (doc.data()!['height'] as int).toDouble() : doc.data()!['height'] as double;
         notifyListeners();
       }
     } catch (e) {
@@ -86,6 +91,10 @@ class MeasurementsProvider with ChangeNotifier {
       throw Exception('User not authenticated or Firebase not initialized');
     }
     
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    
     try {
       final manualMeasurements = {
         'chest': chest,
@@ -116,9 +125,14 @@ class MeasurementsProvider with ChangeNotifier {
       };
       
       await _firestore!.collection('my measurements').doc(_user!.uid).set(data);
+      
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
       print('Error saving measurements: $e');
+      notifyListeners();
       rethrow;
     }
   }
@@ -127,6 +141,10 @@ class MeasurementsProvider with ChangeNotifier {
     if (_user == null || _firestore == null) {
       throw Exception('User not authenticated or Firebase not initialized');
     }
+    
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
     
     try {
       // Process image through API
@@ -151,10 +169,20 @@ class MeasurementsProvider with ChangeNotifier {
       };
       
       await _firestore!.collection('my measurements').doc(_user!.uid).set(data);
+      
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
       print('Error saving image analysis results: $e');
+      notifyListeners();
       rethrow;
     }
+  }
+  
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

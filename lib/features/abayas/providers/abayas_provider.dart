@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
 import '../models/abaya_model.dart';
 import '../../auth/providers/auth_provider.dart' as app_auth;
+import '../../../core/services/api_service.dart';
 
 class AbayasProvider with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -11,10 +13,12 @@ class AbayasProvider with ChangeNotifier {
   List<AbayaModel> _recommendedAbayas = [];
   Set<String> _selectedAbayaIds = {};
   bool _isLoading = false;
+  String? _errorMessage;
   
   List<AbayaModel> get recommendedAbayas => _recommendedAbayas;
   Set<String> get selectedAbayaIds => _selectedAbayaIds;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
   
   void updateAuth(app_auth.AuthProvider authProvider) {
     _user = authProvider.user;
@@ -24,15 +28,43 @@ class AbayasProvider with ChangeNotifier {
   // Load abayas with optional body shape filtering
   Future<void> loadRecommendedAbayas({String? bodyShape}) async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
     
     try {
-      QuerySnapshot snapshot;
-      
-      // If bodyShape is provided, filter by it
       if (bodyShape != null && bodyShape.isNotEmpty) {
         print('Loading abayas for body shape: $bodyShape');
-        snapshot = await _firestore
+        
+        // First try to get recommendations from the API
+        try {
+          final recommendations = await ApiService.recommendAbayas(bodyShape);
+          if (recommendations.isNotEmpty) {
+            _recommendedAbayas = recommendations.map((rec) {
+              // Convert API recommendation to AbayaModel
+              return AbayaModel(
+                id: rec['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                model: rec['style'] ?? 'Style ${rec['id'] ?? ''}',
+                fabric: 'Premium Fabric', // Default values
+                color: 'Black', // Default values
+                description: rec['description'] ?? '',
+                bodyShapeCategory: rec['body_type'] ?? bodyShape,
+                image1Url: rec['image_base64'] != null ? 
+                  'data:image/jpeg;base64,${rec['image_base64']}' : 
+                  'https://via.placeholder.com/300',
+              );
+            }).toList();
+            
+            _isLoading = false;
+            notifyListeners();
+            return;
+          }
+        } catch (apiError) {
+          print('Error from API, falling back to Firestore: $apiError');
+          // If API fails, we'll fall back to Firestore
+        }
+        
+        // Fallback to Firestore if API didn't work
+        QuerySnapshot snapshot = await _firestore
             .collection('Abayas')
             .where('bodyShapeCategory', isEqualTo: bodyShape)
             .get();
@@ -42,22 +74,30 @@ class AbayasProvider with ChangeNotifier {
           print('No abayas found for body shape: $bodyShape. Loading all abayas.');
           snapshot = await _firestore.collection('Abayas').get();
         }
+        
+        _recommendedAbayas = snapshot.docs.map((doc) => 
+          AbayaModel.fromMap({
+            'id': doc.id,
+            ...doc.data() as Map<String, dynamic>,
+          })
+        ).toList();
       } else {
         // No body shape filter, get all abayas
         print('Loading all abayas');
-        snapshot = await _firestore.collection('Abayas').get();
+        final snapshot = await _firestore.collection('Abayas').get();
+        
+        _recommendedAbayas = snapshot.docs.map((doc) => 
+          AbayaModel.fromMap({
+            'id': doc.id,
+            ...doc.data() as Map<String, dynamic>,
+          })
+        ).toList();
       }
-      
-      _recommendedAbayas = snapshot.docs.map((doc) => 
-        AbayaModel.fromMap({
-          'id': doc.id,
-          ...doc.data() as Map<String, dynamic>,
-        })
-      ).toList();
       
       print('Loaded ${_recommendedAbayas.length} abayas');
     } catch (e) {
       print('Error loading abayas: $e');
+      _errorMessage = e.toString();
       _recommendedAbayas = [];
     } finally {
       _isLoading = false;
@@ -144,6 +184,11 @@ class AbayasProvider with ChangeNotifier {
   
   void clearSelection() {
     _selectedAbayaIds.clear();
+    notifyListeners();
+  }
+  
+  void clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
 }

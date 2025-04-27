@@ -1,0 +1,2 @@
+/Users/MRO/Desktop/cursor/hullah_app/android/app/.cxx/RelWithDebInfo/422y3423/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/MRO/Desktop/cursor/hullah_app/android/app/.cxx/RelWithDebInfo/422y3423/arm64-v8a/CMakeFiles/rebuild_cache.dir
