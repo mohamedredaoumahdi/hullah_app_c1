@@ -1,3 +1,5 @@
+// lib/features/measurements/screens/body_analysis_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,34 @@ import '../providers/measurements_provider.dart';
 
 class BodyAnalysisScreen extends StatelessWidget {
   const BodyAnalysisScreen({super.key});
+
+  // Function to show confirmation dialog
+  Future<bool> _confirmRetakeMeasurements(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('تأكيد العودة'),
+        content: Text('هل أنت متأكد من العودة لإعادة أخذ القياسات؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('نعم', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    
+    return result ?? false;
+  }
+
+  // Function to navigate back to measurements input
+  void _navigateToMeasurements(BuildContext context) {
+    context.go('/measurements/input');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,137 +54,157 @@ class BodyAnalysisScreen extends StatelessWidget {
       );
     }
     
-    return RTLScaffold(
-      title: 'تحليل الجسم',
-      showBackButton: true,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Body Shape Result Card
-              Card(
-                color: AppTheme.primaryColor,
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Text(
-                        'شكل جسمك هو',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
+    return WillPopScope(
+      onWillPop: () async {
+        final shouldReturn = await _confirmRetakeMeasurements(context);
+        if (shouldReturn) {
+          _navigateToMeasurements(context);
+        }
+        return false; // Prevent default back behavior
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('تحليل الجسم'),
+          centerTitle: true,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () async {
+              final shouldReturn = await _confirmRetakeMeasurements(context);
+              if (shouldReturn) {
+                _navigateToMeasurements(context);
+              }
+            },
+          ),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Body Shape Result Card
+                Card(
+                  color: AppTheme.primaryColor,
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Text(
+                          'شكل جسمك هو',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        bodyShape,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(height: 8),
+                        Text(
+                          bodyShape,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Icon(
-                        _getBodyShapeIcon(bodyShape),
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Icon(
+                          _getBodyShapeIcon(bodyShape),
+                          size: 60,
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Measurements Summary
-              Text(
-                'ملخص القياسات',
-                style: Theme.of(context).textTheme.displaySmall,
-              ),
-              const SizedBox(height: 16),
-              _buildMeasurementRow(
-                context,
-                'محيط الصدر',
-                '${measurements['chest']?.toInt() ?? 0} سم',
-              ),
-              _buildMeasurementRow(
-                context,
-                'محيط الخصر',
-                '${measurements['waist']?.toInt() ?? 0} سم',
-              ),
-              _buildMeasurementRow(
-                context,
-                'محيط الأرداف',
-                '${measurements['hips']?.toInt() ?? 0} سم',
-              ),
-              _buildMeasurementRow(
-                context,
-                'عرض الكتفين',
-                '${measurements['shoulder']?.toInt() ?? 0} سم',
-              ),
-              _buildMeasurementRow(
-                context,
-                'طول الذراع',
-                '${measurements['armLength']?.toInt() ?? 0} سم',
-              ),
-              _buildMeasurementRow(
-                context,
-                'الطول',
-                '${measurements['height']?.toInt() ?? 0} سم',
-              ),
-              const SizedBox(height: 32),
-              
-              // Recommendations
-              Text(
-                'توصيات العبايات',
-                style: Theme.of(context).textTheme.displaySmall,
-              ),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _getRecommendations(bodyShape)
-                        .map((recommendation) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: AppTheme.primaryColor,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      recommendation,
-                                      style: Theme.of(context).textTheme.bodyLarge,
+                const SizedBox(height: 24),
+                
+                // Measurements Summary
+                Text(
+                  'ملخص القياسات',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+                const SizedBox(height: 16),
+                _buildMeasurementRow(
+                  context,
+                  'محيط الصدر',
+                  '${measurements['chest']?.toInt() ?? 0} سم',
+                ),
+                _buildMeasurementRow(
+                  context,
+                  'محيط الخصر',
+                  '${measurements['waist']?.toInt() ?? 0} سم',
+                ),
+                _buildMeasurementRow(
+                  context,
+                  'محيط الأرداف',
+                  '${measurements['hips']?.toInt() ?? 0} سم',
+                ),
+                _buildMeasurementRow(
+                  context,
+                  'عرض الكتفين',
+                  '${measurements['shoulder']?.toInt() ?? 0} سم',
+                ),
+                _buildMeasurementRow(
+                  context,
+                  'طول الذراع',
+                  '${measurements['armLength']?.toInt() ?? 0} سم',
+                ),
+                _buildMeasurementRow(
+                  context,
+                  'الطول',
+                  '${measurements['height']?.toInt() ?? 0} سم',
+                ),
+                const SizedBox(height: 32),
+                
+                // Recommendations
+                Text(
+                  'توصيات العبايات',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _getRecommendations(bodyShape)
+                          .map((recommendation) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      color: AppTheme.primaryColor,
+                                      size: 20,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        recommendation,
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              
-              ElevatedButton.icon(
-                onPressed: () => context.go('/abayas/selection'),
-                icon: Icon(Icons.checkroom),
-                label: Text('متابعة لاختيار العبايات'),
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 32),
+                
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/abayas/selection'),
+                  icon: Icon(Icons.checkroom),
+                  label: Text('متابعة لاختيار العبايات'),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
+import '../../../core/utils/navigation_utils.dart';
 import '../providers/abayas_provider.dart';
 import '../models/abaya_model.dart';
 
@@ -67,6 +68,11 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
       title: _abaya!.model,
       showBackButton: true,
       showDrawer: false, // No drawer on details page
+      onBackPressed: () {
+        // Update selected abayas before popping
+        final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+        abayasProvider.updateSelectedAbayas(Set<String>.from(abayasProvider.selectedAbayaIds));
+      },
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,7 +217,7 @@ class _AbayaDetailsScreenState extends State<AbayaDetailsScreen> {
           selectedIds.add(widget.abayaId);
           abayasProvider.updateSelectedAbayas(selectedIds);
           
-          context.pop();
+          context.safeNavigateBack();
         },
         style: ElevatedButton.styleFrom(
           minimumSize: Size(double.infinity, 50),

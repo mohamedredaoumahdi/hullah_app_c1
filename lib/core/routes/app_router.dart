@@ -1,4 +1,7 @@
+// lib/core/routes/app_router.dart
 import 'package:go_router/go_router.dart';
+import 'package:flutter/material.dart';
+import '../utils/navigation_utils.dart';
 
 import '../../features/splash/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -80,4 +83,30 @@ class AppRouter {
       ),
     ],
   );
+}
+
+/// Extension methods for enhanced GoRouter functionality
+extension GoRouterExtensions on GoRouter {
+  /// A wrapper to enhance GoRouter's error handling for navigation
+  ///
+  /// This wrapper handles common edge cases in navigation like rapidly
+  /// pressing the back button, which can lead to inconsistent behavior
+  void safeGo(BuildContext context, String location) {
+    try {
+      go(location);
+    } catch (e) {
+      print('Error navigating to $location: $e');
+      // Try a fallback approach if the standard go() fails
+      try {
+        // First try to push instead of go
+        push(location);
+      } catch (e2) {
+        print('Fallback push failed too: $e2');
+        // Last resort - use system back navigation
+        if (context.mounted) {
+          context.safeNavigateBack();
+        }
+      }
+    }
+  }
 }

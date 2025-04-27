@@ -1,3 +1,5 @@
+// lib/features/abayas/providers/abayas_provider.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,7 +31,7 @@ class AbayasProvider with ChangeNotifier {
   Future<void> loadRecommendedAbayas({String? bodyShape}) async {
     _isLoading = true;
     _errorMessage = null;
-    notifyListeners();
+    // Don't call notifyListeners() here - this prevents the error
     
     try {
       if (bodyShape != null && bodyShape.isNotEmpty) {
@@ -101,7 +103,7 @@ class AbayasProvider with ChangeNotifier {
       _recommendedAbayas = [];
     } finally {
       _isLoading = false;
-      notifyListeners();
+      notifyListeners(); // Only notify listeners once at the end
     }
   }
   

@@ -6,6 +6,7 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
+import '../../../core/utils/navigation_utils.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -20,6 +21,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   bool _isLoading = false;
 
+  Future<void> _saveProfile() async {
+    if (_formKey.currentState?.saveAndValidate() ?? false) {
+      setState(() => _isLoading = true);
+      
+      final values = _formKey.currentState!.value;
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      try {
+        await authProvider.updateProfile(
+          name: values['name'],
+          phone: values['phone'],
+          height: double.parse(values['height']),
+          dateOfBirth: values['dateOfBirth'],
+        );
+        
+        if (mounted) {
+          setState(() {
+            _isEditing = false;
+            _isLoading = false;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تم تحديث الملف الشخصي بنجاح')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('فشل تحديث الملف الشخصي. الرجاء المحاولة مرة أخرى.')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -30,6 +67,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       showBackButton: true,
       confirmOnBack: _isEditing, // Show confirmation when in editing mode
       confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان التغييرات غير المحفوظة.',
+      onBackPressed: () {
+        // This ensures we save any state or do any cleanup needed
+        if (_isEditing) {
+          setState(() => _isEditing = false);
+        }
+      },
       actions: [
         IconButton(
           icon: Icon(_isEditing ? Icons.check : Icons.edit),
@@ -164,41 +207,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-  }
-  
-  Future<void> _saveProfile() async {
-    if (_formKey.currentState?.saveAndValidate() ?? false) {
-      setState(() => _isLoading = true);
-      
-      final values = _formKey.currentState!.value;
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      
-      try {
-        await authProvider.updateProfile(
-          name: values['name'],
-          phone: values['phone'],
-          height: double.parse(values['height']),
-          dateOfBirth: values['dateOfBirth'],
-        );
-        
-        if (mounted) {
-          setState(() {
-            _isEditing = false;
-            _isLoading = false;
-          });
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('تم تحديث الملف الشخصي بنجاح')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('فشل تحديث الملف الشخصي. الرجاء المحاولة مرة أخرى.')),
-          );
-        }
-      }
-    }
   }
 }

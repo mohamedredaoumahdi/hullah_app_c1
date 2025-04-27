@@ -1,6 +1,6 @@
 // lib/core/widgets/back_button_handler.dart
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../utils/navigation_utils.dart';
 
 class BackButtonHandler extends StatelessWidget {
   final Widget child;
@@ -33,27 +33,12 @@ class BackButtonHandler extends StatelessWidget {
           return true;
         }
         
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text(confirmationTitle),
-              content: Text(confirmationMessage),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('إلغاء'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text('خروج', style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            );
-          },
+        final result = await context.showNavigationConfirmation(
+          title: confirmationTitle,
+          message: confirmationMessage,
         );
         
-        if (result == true) {
+        if (result) {
           if (onWillPop != null) onWillPop!();
           return true;
         }
@@ -66,33 +51,18 @@ class BackButtonHandler extends StatelessWidget {
             onPressed: () async {
               if (!shouldConfirm) {
                 if (onWillPop != null) onWillPop!();
-                context.pop();
+                context.safeNavigateBack();
                 return;
               }
               
-              final result = await showDialog<bool>(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: Text(confirmationTitle),
-                    content: Text(confirmationMessage),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text('إلغاء'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text('خروج', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  );
-                },
+              final result = await context.showNavigationConfirmation(
+                title: confirmationTitle,
+                message: confirmationMessage,
               );
               
-              if (result == true) {
+              if (result) {
                 if (onWillPop != null) onWillPop!();
-                if (context.mounted) context.pop();
+                context.safeNavigateBack();
               }
             },
           ),

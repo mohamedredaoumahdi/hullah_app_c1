@@ -1,3 +1,5 @@
+// lib/features/measurements/screens/image_upload_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -6,9 +8,9 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/measurements_provider.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../../core/widgets/loading_screen.dart';
 
 class ImageUploadScreen extends StatefulWidget {
   const ImageUploadScreen({super.key});
@@ -99,7 +101,12 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
       
       if (mounted) {
         Navigator.pop(context); // Dismiss loading dialog
-        context.go('/measurements/analysis');
+        
+        // Add a small delay before navigation
+        await Future.delayed(Duration(milliseconds: 300));
+        if (mounted) {
+          context.go('/measurements/analysis');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -128,49 +135,14 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
     }
   }
 
-  Future<void> _confirmCancel() async {
-    if (_selectedImage == null) {
-      context.go('/home');
-      return;
-    }
-    
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('تأكيد الإلغاء'),
-          content: Text('هل أنت متأكدة من إلغاء العملية؟'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('لا'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('نعم', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
-    );
-    
-    if (result == true && mounted) {
-      context.go('/home');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('رفع صورة للقياسات'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: _confirmCancel,
-        ),
-      ),
+    return RTLScaffold(
+      title: 'رفع صورة للقياسات',
+      showBackButton: true,
+      confirmOnBack: _selectedImage != null,
+      fallbackRoute: '/home',
+      confirmationMessage: 'هل أنت متأكدة من إلغاء العملية؟',
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),

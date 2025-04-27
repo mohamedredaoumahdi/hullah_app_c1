@@ -1,3 +1,5 @@
+// lib/features/measurements/screens/measurements_input_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +30,8 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
     return RTLScaffold(
       title: 'إدخال القياسات',
       showBackButton: true,
-      confirmOnBack: _hasChanges, // Show confirmation if form has changes
+      confirmOnBack: _hasChanges,
+      fallbackRoute: '/home',
       confirmationMessage: 'هل أنت متأكد من الخروج؟ سيتم فقدان القياسات المدخلة.',
       body: SafeArea(
         child: SingleChildScrollView(
@@ -308,14 +311,19 @@ class _MeasurementsInputScreenState extends State<MeasurementsInputScreen> {
         );
         
         if (mounted) {
-          Navigator.pop(context); // Close the loading dialog
+          // First close the loading dialog
+          Navigator.pop(context);
+          
           setState(() {
             _hasChanges = false;
             _isLoading = false;
           });
           
-          // Navigate to body analysis screen
-          context.go('/measurements/analysis');
+          // Add a small delay before navigation
+          await Future.delayed(Duration(milliseconds: 300));
+          if (mounted) {
+            context.go('/measurements/analysis');
+          }
         }
       } catch (e) {
         if (mounted) {

@@ -1,8 +1,10 @@
 // lib/core/widgets/rtl_scaffold.dart
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/back_navigation_manager.dart';
 import '../../features/auth/providers/auth_provider.dart' as app_auth;
 
 class RTLScaffold extends StatelessWidget {
@@ -15,6 +17,7 @@ class RTLScaffold extends StatelessWidget {
   final bool confirmOnBack;
   final String confirmationTitle;
   final String confirmationMessage;
+  final String? fallbackRoute;
   final VoidCallback? onBackPressed;
   
   const RTLScaffold({
@@ -28,6 +31,7 @@ class RTLScaffold extends StatelessWidget {
     this.confirmOnBack = false,
     this.confirmationTitle = 'تأكيد الخروج',
     this.confirmationMessage = 'هل أنت متأكد من الخروج؟ سيتم فقدان البيانات غير المحفوظة.',
+    this.fallbackRoute,
     this.onBackPressed,
   });
 
@@ -38,33 +42,14 @@ class RTLScaffold extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: WillPopScope(
-        onWillPop: confirmOnBack ? () async {
-          final result = await showDialog<bool>(
-            context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                title: Text(confirmationTitle),
-                content: Text(confirmationMessage),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('إلغاء'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text('خروج', style: TextStyle(color: Colors.red)),
-                  ),
-                ],
-              );
-            },
-          );
-          
-          if (result == true) {
-            if (onBackPressed != null) onBackPressed!();
-            return true;
-          }
-          return false;
-        } : null,
+        onWillPop: () => BackNavigationManager.handleWillPop(
+          context,
+          needsConfirmation: confirmOnBack,
+          title: confirmationTitle,
+          message: confirmationMessage,
+          fallbackRoute: fallbackRoute,
+          onBeforeNavigate: onBackPressed,
+        ),
         child: Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
@@ -75,36 +60,14 @@ class RTLScaffold extends StatelessWidget {
               ? IconButton(
                   icon: Icon(Icons.arrow_back),
                   onPressed: () async {
-                    if (!confirmOnBack) {
-                      if (onBackPressed != null) onBackPressed!();
-                      context.pop();
-                      return;
-                    }
-                    
-                    final result = await showDialog<bool>(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: Text(confirmationTitle),
-                          content: Text(confirmationMessage),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: Text('إلغاء'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: Text('خروج', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
-                        );
-                      },
+                    await BackNavigationManager.handleBackButton(
+                      context,
+                      needsConfirmation: confirmOnBack,
+                      title: confirmationTitle,
+                      message: confirmationMessage,
+                      fallbackRoute: fallbackRoute,
+                      onBeforeNavigate: onBackPressed,
                     );
-                    
-                    if (result == true) {
-                      if (onBackPressed != null) onBackPressed!();
-                      if (context.mounted) context.pop();
-                    }
                   },
                 )
               : showDrawer 
