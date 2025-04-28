@@ -56,74 +56,42 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
   }
 
   Future<void> _loadAbayas() async {
-    if (!mounted) return;
+  if (!mounted) return;
+  
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+    _isRetrying = false;
+  });
+  
+  try {
+    final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
+    final bodyShape = measurementsProvider.bodyShape;
     
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _isRetrying = false;
-    });
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
     
-    try {
-      // First check if the API is available
-      _isApiAvailable = ApiService.isApiAvailable;
-      
-      final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
-      final bodyShape = measurementsProvider.bodyShape;
-      
-      if (_debugMode) {
-        print('⚙️ Loading abayas for body shape: $bodyShape');
-        print('⚙️ API availability: $_isApiAvailable');
-      }
-      
-      final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-      
-      // If we have an active summary, load its selected abayas
-      final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-      if (summaryProvider.activeSummaryId != null) {
-        await abayasProvider.loadSelectedAbayasForSummary(summaryProvider.activeSummaryId!);
-      }
-      
-      await abayasProvider.loadRecommendedAbayas(bodyShape: bodyShape);
-      
-      if (_debugMode) {
-        print('⚙️ Loaded ${abayasProvider.recommendedAbayas.length} abayas');
-        
-        // Log the first abaya for inspection if available
-        if (abayasProvider.recommendedAbayas.isNotEmpty) {
-          final firstAbaya = abayasProvider.recommendedAbayas.first;
-          print('⚙️ First abaya: id=${firstAbaya.id}, model=${firstAbaya.model}');
-          
-          // Log truncated image URL
-          final imagePreview = firstAbaya.image1Url.length > 100 ? 
-            '${firstAbaya.image1Url.substring(0, 100)}...' : 
-            firstAbaya.image1Url;
-          print('⚙️ First abaya image preview: $imagePreview');
-        }
-      }
-      
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = abayasProvider.errorMessage;
-          _selectedAbayas = Set<String>.from(abayasProvider.selectedAbayaIds);
-          _isApiAvailable = ApiService.isApiAvailable;
-        });
-      }
-    } catch (e) {
-      if (_debugMode) {
-        print('❌ Error loading abayas: $e');
-      }
-      
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = e.toString();
-          _isApiAvailable = ApiService.isApiAvailable;
-        });
-      }
+    // Load abayas, strictly from Firestore
+    await abayasProvider.loadRecommendedAbayas(
+      bodyShape: bodyShape, 
+      useFirestoreOnly: true  // Force Firestore
+    );
+    
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = abayasProvider.errorMessage;
+        _selectedAbayas = Set<String>.from(abayasProvider.selectedAbayaIds);
+      });
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
     }
   }
+}
 
   Future<void> _forceRefreshAbayas() async {
     if (_debugMode) {
@@ -396,54 +364,59 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: _selectedAbayas.isEmpty
-                        ? null
-                        : () async {
-                            // Show a loading indicator
-                            _showSavingDialog(context);
-                            
-                            try {
-                              // Save selected abayas before navigating
-                              final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-                              await abayasProvider.saveSelectedAbayasToSummary();
-                              
-                              if (mounted) {
-                                // Dismiss the loading dialog
-                                Navigator.pop(context);
-                                
-                                // Navigate to summary
-                                context.go('/summary');
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                // Dismiss the loading dialog
-                                Navigator.pop(context);
-                                
-                                // Show error
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('فشل في حفظ العبايات: ${e.toString()}'),
-                                    action: SnackBarAction(
-                                      label: 'إعادة المحاولة',
-                                      onPressed: () {
-                                        // Try again
-                                        abayasProvider.saveSelectedAbayasToSummary().then((_) {
-                                          if (mounted) {
-                                            context.go('/summary');
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: Size(double.infinity, 48),
-                    ),
-                    child: Text('عرض الملخص'),
-                  ),
+  onPressed: _selectedAbayas.isEmpty
+    ? null
+    : () async {
+        // Show a loading indicator
+        _showSavingDialog(context);
+        
+        try {
+          final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+          final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+          
+          // Save selected abayas to summary
+          await abayasProvider.saveSelectedAbayasToSummary();
+          
+          // Create or update the summary
+          final selectedAbayas = abayasProvider.recommendedAbayas
+              .where((abaya) => _selectedAbayas.contains(abaya.id))
+              .toList();
+          
+          await summaryProvider.updateSummary(selectedAbayas: selectedAbayas);
+          
+          if (mounted) {
+            // Dismiss the loading dialog
+            Navigator.pop(context);
+            
+            // Navigate to summary
+            context.go('/summary');
+          }
+        } catch (e) {
+          if (mounted) {
+            // Dismiss the loading dialog
+            Navigator.pop(context);
+            
+            // Show error
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('فشل في حفظ العبايات: ${e.toString()}'),
+                action: SnackBarAction(
+                  label: 'إعادة المحاولة',
+                  onPressed: () {
+                    // Try again
+                    context.go('/summary');
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      },
+  style: ElevatedButton.styleFrom(
+    minimumSize: Size(double.infinity, 48),
+  ),
+  child: Text('عرض الملخص'),
+),
                 ],
               ),
             ),

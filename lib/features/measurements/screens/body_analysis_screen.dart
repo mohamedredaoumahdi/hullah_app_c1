@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hullah_app/features/abayas/providers/abayas_provider.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
@@ -175,13 +176,39 @@ class BodyAnalysisScreen extends StatelessWidget {
             const SizedBox(height: 32),
             
             ElevatedButton.icon(
-              onPressed: () => context.go('/abayas/selection'),
-              icon: Icon(Icons.checkroom),
-              label: Text('متابعة لاختيار العبايات'),
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
+  onPressed: () {
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+    final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
+    final bodyShape = measurementsProvider.bodyShape;
+    
+    // Explicitly force Firestore-only loading
+    abayasProvider.loadRecommendedAbayas(
+      bodyShape: bodyShape, 
+      useFirestoreOnly: true  // Strictly use Firestore
+    ).then((_) {
+      // Navigate to abaya selection screen
+      context.go('/abayas/selection');
+    }).catchError((error) {
+      // Handle potential errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل في تحميل العبايات: $error'),
+          action: SnackBarAction(
+            label: 'حسناً',
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+    });
+  },
+  icon: Icon(Icons.checkroom),
+  label: Text('متابعة لاختيار العبايات'),
+  style: ElevatedButton.styleFrom(
+    padding: EdgeInsets.symmetric(vertical: 16),
+  ),
+),
           ],
         ),
       ),
