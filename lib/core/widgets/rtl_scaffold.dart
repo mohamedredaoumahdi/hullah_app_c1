@@ -1,6 +1,7 @@
 // lib/core/widgets/rtl_scaffold.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
@@ -30,7 +31,7 @@ class RTLScaffold extends StatelessWidget {
     this.showDrawer = true,
     this.confirmOnBack = false,
     this.confirmationTitle = 'تأكيد الخروج',
-    this.confirmationMessage = 'هل أنت متأكد من الخروج؟ سيتم فقدان البيانات غير المحفوظة.',
+    this.confirmationMessage = 'هل أنت متأكدة من الخروج؟ سيتم فقدان البيانات غير المحفوظة.',
     this.fallbackRoute,
     this.onBackPressed,
   });
@@ -39,41 +40,94 @@ class RTLScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<app_auth.AuthProvider>(context);
     
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: WillPopScope(
-        onWillPop: () => BackNavigationManager.handleWillPop(
+    return PopScope(
+      canPop: !confirmOnBack,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        
+        // Handle the back button press with confirmation if needed
+        final shouldPop = await BackNavigationManager.confirmBackNavigation(
           context,
           needsConfirmation: confirmOnBack,
           title: confirmationTitle,
           message: confirmationMessage,
-          fallbackRoute: fallbackRoute,
-          onBeforeNavigate: onBackPressed,
-        ),
+        );
+        
+        if (shouldPop) {
+          if (onBackPressed != null) {
+            onBackPressed!();
+          }
+          
+          if (context.mounted) {
+            // First try to handle navigation using standard pop
+            if (Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            } 
+            // If pop fails and we have a fallback route, use it
+            else if (fallbackRoute != null) {
+              try {
+                context.go(fallbackRoute!);
+              } catch (e) {
+                print('Error navigating to fallbackRoute: $e');
+                // Try one more approach if that fails
+                try {
+                  SystemNavigator.pop();
+                } catch (e2) {
+                  print('Error with SystemNavigator.pop(): $e2');
+                }
+              }
+            }
+          }
+        }
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
         child: Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
             title: Text(title),
             centerTitle: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
             actions: actions,
             leading: showBackButton 
-              ? IconButton(
-                  icon: Icon(Icons.arrow_back),
+              ? BackButton(
+                  color: AppTheme.blackColor,
                   onPressed: () async {
-                    await BackNavigationManager.handleBackButton(
-                      context,
-                      needsConfirmation: confirmOnBack,
-                      title: confirmationTitle,
-                      message: confirmationMessage,
-                      fallbackRoute: fallbackRoute,
-                      onBeforeNavigate: onBackPressed,
-                    );
+                    // This ensures the back button works reliably
+                    if (confirmOnBack) {
+                      final shouldPop = await BackNavigationManager.confirmBackNavigation(
+                        context,
+                        needsConfirmation: true,
+                        title: confirmationTitle,
+                        message: confirmationMessage,
+                      );
+                      
+                      if (!shouldPop) return;
+                      
+                      if (onBackPressed != null) {
+                        onBackPressed!();
+                      }
+                    } else if (onBackPressed != null) {
+                      onBackPressed!();
+                    }
+                    
+                    // Handle navigation
+                    if (Navigator.canPop(context)) {
+                      Navigator.of(context).pop();
+                    } else if (fallbackRoute != null) {
+                      try {
+                        context.go(fallbackRoute!);
+                      } catch (e) {
+                        print('Error navigating to fallbackRoute: $e');
+                      }
+                    }
                   },
                 )
               : showDrawer 
                 ? Builder(
                     builder: (context) => IconButton(
-                      icon: Icon(Icons.menu),
+                      icon: Icon(Icons.menu, color: AppTheme.blackColor),
                       onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   )
@@ -147,7 +201,7 @@ class RTLScaffold extends StatelessWidget {
               title: 'القياسات',
               onTap: () {
                 Navigator.pop(context);
-                context.go('/measurements/input');
+                context.go('/measurements/instructions'); // Updated to go to instructions first
               },
             ),
             _buildDrawerItem(
@@ -166,6 +220,15 @@ class RTLScaffold extends StatelessWidget {
               onTap: () {
                 Navigator.pop(context);
                 context.go('/summary');
+              },
+            ),
+            _buildDrawerItem(
+              context: context,
+              icon: Icons.history,
+              title: 'التجارب',
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/home'); // Will show previous trials section
               },
             ),
             _buildDrawerItem(

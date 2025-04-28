@@ -230,9 +230,6 @@ class AbayasProvider with ChangeNotifier {
         print('❌ Error in _processFirestoreResults: $e');
       }
       throw e; // Rethrow to be caught by outer try/catch
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
   
@@ -319,220 +316,220 @@ class AbayasProvider with ChangeNotifier {
     notifyListeners();
   }
   
-  // Update to AbayasProvider.saveSelectedAbayasToSummary method
-
-Future<void> saveSelectedAbayasToSummary() async {
-  if (_user == null || _firestore == null) {
-    if (_debugMode) {
-      print('❌ Cannot save selected abayas: User is null or Firestore not initialized');
+  // Fix the saveSelectedAbayasToSummary method to use ISO strings for timestamps
+  Future<void> saveSelectedAbayasToSummary() async {
+    if (_user == null) {
+      if (_debugMode) {
+        print('❌ Cannot save selected abayas: User is null');
+      }
+      throw Exception('User not authenticated');
     }
-    throw Exception('User not authenticated or Firestore not initialized');
-  }
-  
-  // Reset retry count at the start of the method
-  _retryCount = 0;
-  
-  if (_debugMode) {
-    print('🔍 Saving selected abayas to summary for user: ${_user!.uid}');
-    print('🔍 Selected abaya IDs: ${_selectedAbayaIds.join(', ')}');
-    print('🔍 Active summary ID: $_activeSummaryId');
-  }
-  
-  try {
-    final List<Map<String, dynamic>> selectedAbayasData = [];
     
-    for (final id in _selectedAbayaIds) {
-      final abaya = await getAbayaById(id);
-      if (abaya != null) {
-        selectedAbayasData.add(abaya.toMap());
-      } else {
-        if (_debugMode) {
-          print('⚠️ Abaya with ID $id not found');
+    // Reset retry count at the start of the method
+    _retryCount = 0;
+    
+    if (_debugMode) {
+      print('🔍 Saving selected abayas to summary for user: ${_user!.uid}');
+      print('🔍 Selected abaya IDs: ${_selectedAbayaIds.join(', ')}');
+      print('🔍 Active summary ID: $_activeSummaryId');
+    }
+    
+    try {
+      final List<Map<String, dynamic>> selectedAbayasData = [];
+      
+      for (final id in _selectedAbayaIds) {
+        final abaya = await getAbayaById(id);
+        if (abaya != null) {
+          selectedAbayasData.add(abaya.toMap());
+        } else {
+          if (_debugMode) {
+            print('⚠️ Abaya with ID $id not found');
+          }
         }
       }
-    }
-    
-    if (selectedAbayasData.isEmpty) {
-      if (_debugMode) {
-        print('⚠️ No valid abayas to save');
-      }
-      throw Exception('No valid abayas found to save');
-    }
-    
-    if (_debugMode) {
-      print('🔍 Prepared ${selectedAbayasData.length} abaya objects for saving');
-    }
-    
-    // Ensure we have a summary ID
-    if (_activeSummaryId == null) {
-      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
-      if (_debugMode) {
-        print('🔍 Generated new active summary ID: $_activeSummaryId');
-      }
-    }
-    
-    // First get the current document
-    final docRef = _firestore.collection('my summary').doc(_user!.uid);
-    final docSnapshot = await docRef.get();
-    
-    final currentTimestamp = DateTime.now().toUtc().toIso8601String();
-    
-    if (docSnapshot.exists) {
-      final data = docSnapshot.data() ?? {};
-      List<dynamic> summaries = List.from(data['summaries'] ?? []);
       
-      // Find the index of the existing summary with this ID
-      final existingIndex = summaries.indexWhere((s) => s['id'] == _activeSummaryId);
+      if (selectedAbayasData.isEmpty) {
+        if (_debugMode) {
+          print('⚠️ No valid abayas to save');
+        }
+        throw Exception('No valid abayas found to save');
+      }
       
-      if (existingIndex >= 0) {
-        // Update the existing summary
-        final updatedSummary = {
-          ...summaries[existingIndex] as Map<String, dynamic>,
-          'selectedAbayas': selectedAbayasData,
-          'timestamp': currentTimestamp,
-        };
+      if (_debugMode) {
+        print('🔍 Prepared ${selectedAbayasData.length} abaya objects for saving');
+      }
+      
+      // Ensure we have a summary ID
+      if (_activeSummaryId == null) {
+        _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+        if (_debugMode) {
+          print('🔍 Generated new active summary ID: $_activeSummaryId');
+        }
+      }
+      
+      // First get the current document
+      final docRef = _firestore.collection('my summary').doc(_user!.uid);
+      final docSnapshot = await docRef.get();
+      
+      // Use ISO string for timestamp instead of FieldValue.serverTimestamp()
+      final currentTimestamp = DateTime.now().toUtc().toIso8601String();
+      
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() ?? {};
+        List<dynamic> summaries = List.from(data['summaries'] ?? []);
         
-        summaries[existingIndex] = updatedSummary;
-      } else {
-        // Create a new summary if not found
-        final newSummary = {
-          'id': _activeSummaryId,
-          'userId': _user!.uid,
-          'selectedAbayas': selectedAbayasData,
-          'timestamp': currentTimestamp,
-        };
+        // Find the index of the existing summary with this ID
+        final existingIndex = summaries.indexWhere((s) => s['id'] == _activeSummaryId);
         
-        summaries.add(newSummary);
-      }
-      
-      // Update the document with the updated summaries array
-      await docRef.update({
-        'summaries': summaries,
-        'timestamp': currentTimestamp,
-      });
-      
-      if (_debugMode) {
-        print('✅ Successfully saved selected abayas to existing summary document');
-      }
-    } else {
-      // Create a new document with the summary
-      await docRef.set({
-        'userId': _user!.uid,
-        'summaries': [
-          {
+        if (existingIndex >= 0) {
+          // Update the existing summary
+          final updatedSummary = {
+            ...summaries[existingIndex] as Map<String, dynamic>,
+            'selectedAbayas': selectedAbayasData,
+            'timestamp': currentTimestamp,
+          };
+          
+          summaries[existingIndex] = updatedSummary;
+        } else {
+          // Create a new summary if not found
+          final newSummary = {
             'id': _activeSummaryId,
             'userId': _user!.uid,
             'selectedAbayas': selectedAbayasData,
             'timestamp': currentTimestamp,
-          }
-        ],
-        'timestamp': currentTimestamp,
-      });
-      
-      if (_debugMode) {
-        print('✅ Successfully created new summary document');
-      }
-    }
-  } catch (e, stackTrace) {
-    if (_debugMode) {
-      print('❌ Error saving selected abayas: $e');
-      print('❌ Stack trace: $stackTrace');
-    }
-    
-    // Re-throw the error to be handled by the caller
-    rethrow;
-  }
-}
-// Load selected abayas for a specific summary within the array
-Future<void> loadSelectedAbayasForSummary(String summaryId) async {
-  if (_user == null) {
-    if (_debugMode) {
-      print('❌ Cannot load selected abayas: User is null');
-    }
-    return;
-  }
-  
-  try {
-    _isLoading = true;
-    notifyListeners();
-    
-    if (_debugMode) {
-      print('🔍 Loading selected abayas for summary ID: $summaryId');
-    }
-    
-    // Get the summary document using the user's ID
-    final doc = await _firestore.collection('my summary').doc(_user!.uid).get();
-    
-    if (!doc.exists) {
-      throw Exception('Summary document not found');
-    }
-    
-    final data = doc.data()!;
-    final summariesArray = data['summaries'] as List<dynamic>? ?? [];
-    
-    // Find the specific summary by ID
-    final summary = summariesArray.firstWhere(
-      (s) => s['id'] == summaryId,
-      orElse: () => null,
-    );
-    
-    if (summary == null) {
-      throw Exception('Summary with ID $summaryId not found');
-    }
-    
-    final selectedAbayasData = summary['selectedAbayas'] as List<dynamic>?;
-    
-    if (_debugMode) {
-      print('🔍 Found summary with ${selectedAbayasData?.length ?? 0} selected abayas');
-    }
-    
-    // Set the active summary ID
-    _activeSummaryId = summaryId;
-    
-    // Clear previous selection
-    _selectedAbayaIds.clear();
-    
-    // Add IDs from the summary
-    if (selectedAbayasData != null) {
-      for (final abayaData in selectedAbayasData) {
-        final id = abayaData['id'] as String?;
-        if (id != null) {
-          _selectedAbayaIds.add(id);
+          };
+          
+          summaries.add(newSummary);
+        }
+        
+        // Update the document with the updated summaries array
+        await docRef.update({
+          'summaries': summaries,
+          'timestamp': currentTimestamp,
+        });
+        
+        if (_debugMode) {
+          print('✅ Successfully saved selected abayas to existing summary document');
+        }
+      } else {
+        // Create a new document with the summary
+        await docRef.set({
+          'userId': _user!.uid,
+          'summaries': [
+            {
+              'id': _activeSummaryId,
+              'userId': _user!.uid,
+              'selectedAbayas': selectedAbayasData,
+              'timestamp': currentTimestamp,
+            }
+          ],
+          'timestamp': currentTimestamp,
+        });
+        
+        if (_debugMode) {
+          print('✅ Successfully created new summary document');
         }
       }
-    }
-    
-    if (_debugMode) {
-      print('✅ Loaded ${_selectedAbayaIds.length} selected abaya IDs for summary $summaryId');
-    }
-    
-    _isLoading = false;
-    notifyListeners();
-  } catch (e) {
-    if (_debugMode) {
-      print('❌ Error loading selected abayas for summary: $e');
-    }
-    
-    _isLoading = false;
-    _errorMessage = e.toString();
-    
-    _retryCount++;
-    if (_retryCount < _maxRetries) {
+    } catch (e) {
       if (_debugMode) {
-        print('🔄 Retry attempt $_retryCount for loading selected abayas');
+        print('❌ Error saving selected abayas: $e');
       }
       
-      // Wait a bit before retrying
-      await Future.delayed(Duration(seconds: 2 * _retryCount));
-      
-      // Try again
-      await loadSelectedAbayasForSummary(summaryId);
+      // Re-throw the error to be handled by the caller
+      rethrow;
+    }
+  }
+  
+  // Load selected abayas for a specific summary within the array
+  Future<void> loadSelectedAbayasForSummary(String summaryId) async {
+    if (_user == null) {
+      if (_debugMode) {
+        print('❌ Cannot load selected abayas: User is null');
+      }
       return;
     }
     
-    notifyListeners();
+    try {
+      _isLoading = true;
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('🔍 Loading selected abayas for summary ID: $summaryId');
+      }
+      
+      // Get the summary document using the user's ID
+      final doc = await _firestore.collection('my summary').doc(_user!.uid).get();
+      
+      if (!doc.exists) {
+        throw Exception('Summary document not found');
+      }
+      
+      final data = doc.data()!;
+      final summariesArray = data['summaries'] as List<dynamic>? ?? [];
+      
+      // Find the specific summary by ID
+      final summary = summariesArray.firstWhere(
+        (s) => s['id'] == summaryId,
+        orElse: () => null,
+      );
+      
+      if (summary == null) {
+        throw Exception('Summary with ID $summaryId not found');
+      }
+      
+      final selectedAbayasData = summary['selectedAbayas'] as List<dynamic>?;
+      
+      if (_debugMode) {
+        print('🔍 Found summary with ${selectedAbayasData?.length ?? 0} selected abayas');
+      }
+      
+      // Set the active summary ID
+      _activeSummaryId = summaryId;
+      
+      // Clear previous selection
+      _selectedAbayaIds.clear();
+      
+      // Add IDs from the summary
+      if (selectedAbayasData != null) {
+        for (final abayaData in selectedAbayasData) {
+          final id = abayaData['id'] as String?;
+          if (id != null) {
+            _selectedAbayaIds.add(id);
+          }
+        }
+      }
+      
+      if (_debugMode) {
+        print('✅ Loaded ${_selectedAbayaIds.length} selected abaya IDs for summary $summaryId');
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      if (_debugMode) {
+        print('❌ Error loading selected abayas for summary: $e');
+      }
+      
+      _isLoading = false;
+      _errorMessage = e.toString();
+      
+      _retryCount++;
+      if (_retryCount < _maxRetries) {
+        if (_debugMode) {
+          print('🔄 Retry attempt $_retryCount for loading selected abayas');
+        }
+        
+        // Wait a bit before retrying
+        await Future.delayed(Duration(seconds: 2 * _retryCount));
+        
+        // Try again
+        await loadSelectedAbayasForSummary(summaryId);
+        return;
+      }
+      
+      notifyListeners();
+    }
   }
-}
   
   // Clear the cache to force a reload of data
   void clearCache() {
@@ -578,4 +575,5 @@ Future<void> loadSelectedAbayasForSummary(String summaryId) async {
   
   // Helper function for min
   int min(int a, int b) => a < b ? a : b;
+
 }

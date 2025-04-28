@@ -59,20 +59,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       
       if (!mounted) return;
       
-      // Check authentication state safely
-      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
-      
-      // Choose next screen based on authentication state
-      if (authProvider.isAuthenticated) {
-        context.go('/home');
-      } else {
-        context.go('/login');
-      }
+      // Navigate to the Start screen regardless of authentication status
+      context.go('/start');
     } catch (e) {
       print('Error in splash navigation: $e');
-      // If there's an error, still try to navigate to login
+      // If there's an error, still try to navigate to start
       if (mounted) {
-        context.go('/login');
+        context.go('/start');
       }
     }
   }
@@ -119,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'صانعة الأناقة والجمال',
+                      'لكل انثى حلة تليق بها',
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: Colors.white,
                         shadows: [

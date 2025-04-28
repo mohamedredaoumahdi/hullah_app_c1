@@ -10,6 +10,7 @@ import '../../features/home/screens/home_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/measurements/screens/measurements_input_screen.dart';
 import '../../features/measurements/screens/image_upload_screen.dart';
+import '../../features/measurements/screens/photo_instructions_screen.dart';
 import '../../features/measurements/screens/body_analysis_screen.dart';
 import '../../features/abayas/screens/abaya_selection_screen.dart';
 import '../../features/abayas/screens/abaya_details_screen.dart';
@@ -17,6 +18,7 @@ import '../../features/summary/screens/my_summary_screen.dart';
 import '../../features/summary/screens/final_summary_screen.dart';
 import '../../features/support/screens/support_screen.dart';
 import '../../features/thank_you/screens/thank_you_screen.dart';
+import '../../features/start/screens/start_screen.dart';
 
 class AppRouter {
   static final router = GoRouter(
@@ -25,6 +27,10 @@ class AppRouter {
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/start',
+        builder: (context, state) => const StartScreen(),
       ),
       GoRoute(
         path: '/login',
@@ -41,6 +47,10 @@ class AppRouter {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/measurements/instructions',
+        builder: (context, state) => const PhotoInstructionsScreen(),
       ),
       GoRoute(
         path: '/measurements/input',

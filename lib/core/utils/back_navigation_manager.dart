@@ -1,6 +1,7 @@
 // lib/core/utils/back_navigation_manager.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 /// A utility class to handle back navigation throughout the app
@@ -37,33 +38,43 @@ class BackNavigationManager {
     return result ?? false;
   }
   
-  /// Navigate back to a specific route
-  static void navigateBack(
+  /// Navigate back with improved reliability
+  /// 
+  /// This method tries multiple approaches to ensure reliable back navigation
+  static Future<void> navigateBack(
     BuildContext context, {
     String? fallbackRoute,
     VoidCallback? onBeforeNavigate,
-  }) {
+  }) async {
     // Execute optional callback
     if (onBeforeNavigate != null) {
       onBeforeNavigate();
     }
     
     // Try to pop current route
+    bool popped = false;
+    
     try {
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
-        return;
+        popped = true;
       } 
     } catch (e) {
       print('Error popping route: $e');
     }
     
-    // If popping fails or can't pop, and fallback provided, use it
-    if (fallbackRoute != null) {
+    // If popping fails and fallback provided, use it
+    if (!popped && fallbackRoute != null && context.mounted) {
       try {
         context.go(fallbackRoute);
       } catch (e) {
         print('Error navigating to fallback: $e');
+        // Last resort - try popping system navigation
+        try {
+          await SystemNavigator.pop(animated: true);
+        } catch (e2) {
+          print('Error with SystemNavigator.pop: $e2');
+        }
       }
     }
   }
@@ -85,7 +96,7 @@ class BackNavigationManager {
     );
     
     if (canProceed) {
-      navigateBack(
+      await navigateBack(
         context,
         fallbackRoute: fallbackRoute,
         onBeforeNavigate: onBeforeNavigate,
@@ -93,7 +104,8 @@ class BackNavigationManager {
     }
   }
   
-  /// Setup a WillPopScope handler
+  /// Setup a WillPopScope handler (for pre-Flutter 3.7)
+  /// or PopScope.onPopInvoked handler (for Flutter 3.7+)
   static Future<bool> handleWillPop(
     BuildContext context, {
     bool needsConfirmation = false,
@@ -114,16 +126,19 @@ class BackNavigationManager {
         onBeforeNavigate();
       }
       
-      if (fallbackRoute != null) {
-        if (context.mounted) {
+      if (fallbackRoute != null && context.mounted) {
+        try {
           context.go(fallbackRoute);
+          return false; // Prevent default pop behavior since we're handling navigation
+        } catch (e) {
+          print('Error navigating to fallback route: $e');
+          // Fall through to return true
         }
-        return false; // Prevent default pop behavior
       }
       
-      return true; // Allow default pop behavior
+      return true; // Allow default pop behavior if we didn't handle navigation ourselves
     }
     
-    return false; // Stay on current page
+    return false; // Stay on current page (prevent pop)
   }
 }

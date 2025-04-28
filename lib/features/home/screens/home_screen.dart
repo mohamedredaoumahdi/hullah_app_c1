@@ -59,16 +59,27 @@ class _HomeScreenState extends State<HomeScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final summaryProvider = Provider.of<SummaryProvider>(context);
     final userSummaries = summaryProvider.allUserSummaries;
+    final userName = authProvider.userData?['name'] ?? 'العميلة';
     
     return RTLScaffold(
       title: 'الصفحة الرئيسية',
-      body: _isLoading 
-        ? _buildLoadingState()
-        : _errorMessage != null 
-          ? _buildErrorState()
-          : userSummaries.isEmpty
-            ? _buildEmptyState(context)
-            : _buildSummariesList(context, userSummaries),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              AppTheme.topGradientColor.withOpacity(0.3),
+            ],
+          ),
+        ),
+        child: _isLoading 
+          ? _buildLoadingState()
+          : _errorMessage != null 
+            ? _buildErrorState()
+            : _buildHomeContent(context, userName, userSummaries),
+      ),
     );
   }
   
@@ -79,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           CircularProgressIndicator(color: AppTheme.primaryColor),
           const SizedBox(height: 16),
-          Text('جاري تحميل الملخصات...'),
+          Text('جاري تحميل البيانات...'),
         ],
       ),
     );
@@ -93,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Icon(Icons.error_outline, size: 64, color: Colors.red),
           const SizedBox(height: 16),
           Text(
-            'حدث خطأ أثناء تحميل الملخصات',
+            'حدث خطأ أثناء تحميل البيانات',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -109,67 +120,298 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
+  Widget _buildHomeContent(BuildContext context, String userName, List<Map<String, dynamic>> userSummaries) {
+    return SingleChildScrollView(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'مرحباً بك في تطبيق تفصيل العباية',
-            style: Theme.of(context).textTheme.displaySmall,
-            textAlign: TextAlign.center,
+          // Welcome header with background image
+          _buildWelcomeHeader(context, userName),
+          
+          // Quick actions
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'الخدمات',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+                const SizedBox(height: 16),
+                _buildQuickActions(context),
+                
+                const SizedBox(height: 30),
+                
+                // Recent summaries section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'التجارب السابقة',
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                    if (userSummaries.isNotEmpty)
+                      TextButton(
+                        onPressed: () {
+                          // Navigate to a separate page showing all experiments
+                          // This would be implemented based on your navigation structure
+                        },
+                        child: Text('عرض الكل'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                userSummaries.isEmpty
+                  ? _buildEmptyPreviousTrials(context)
+                  : _buildPreviousTrials(context, userSummaries),
+              ],
+            ),
           ),
-          const SizedBox(height: 32),
-          Image.asset(
-            'assets/images/app_logo_2.png',
-            width: 150,
-            height: 150,
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'لم تقم بإنشاء أي ملخصات بعد',
-            style: TextStyle(fontSize: 16),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          _buildNewSummaryButton(context),
         ],
       ),
     );
   }
   
-  Widget _buildSummariesList(BuildContext context, List<Map<String, dynamic>> summaries) {
+  Widget _buildWelcomeHeader(BuildContext context, String userName) {
+    return Container(
+      width: double.infinity,
+      height: 200,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.primaryColor,
+            AppTheme.bottomGradientColor,
+          ],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+        // image: DecorationImage(
+        //   image: AssetImage('assets/images/abaya_pattern.png'),
+        //   fit: BoxFit.cover,
+        //   opacity: 0.1,
+        // ),
+      ),
+      child: Stack(
+        children: [
+          // Positioned image to the left (RTL layout, so visually on the right)
+          // Positioned(
+          //   left: -30,
+          //   bottom: -20,
+          //   child: Image.asset(
+          //     'assets/images/abaya_silhouette.jpeg',
+          //     height: 200,
+          //     opacity: AlwaysStoppedAnimation(0.3),
+          //   ),
+          // ),
+          // Text content
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'مرحباً بك',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  userName,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'ماذا تحتاجين اليوم؟',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildQuickActions(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _buildActionCard(
+          context,
+          icon: Icons.add_photo_alternate,
+          title: 'تجربة جديدة',
+          onTap: () => context.go('/measurements/instructions'),
+        ),
+        _buildActionCard(
+          context,
+          icon: Icons.history,
+          title: 'تجارب سابقة',
+          onTap: () {
+            // Navigate to experiments page
+            // Or scroll to experiments section
+          },
+        ),
+        _buildActionCard(
+          context,
+          icon: Icons.person,
+          title: 'الملف الشخصي',
+          onTap: () => context.go('/profile'),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.27,
+        padding: EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: AppTheme.primaryColor,
+                size: 24,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildEmptyPreviousTrials(BuildContext context) {
+    return Center(
+      child: Column(
+        children: [
+          Icon(
+            Icons.history,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          SizedBox(height: 16),
+          Text(
+            'لا توجد تجارب سابقة',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'ابدأ تجربتك الأولى وستظهر هنا',
+            style: TextStyle(
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: () => context.go('/measurements/instructions'),
+            icon: Icon(Icons.add),
+            label: Text('تجربة جديدة'),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildPreviousTrials(BuildContext context, List<Map<String, dynamic>> summaries) {
+    // Show at most 3 most recent summaries
+    final recentSummaries = summaries.take(3).toList();
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'الملخصات السابقة',
-            style: Theme.of(context).textTheme.displaySmall,
-            textAlign: TextAlign.center,
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.all(16),
-            itemCount: summaries.length + 1, // +1 for the "Add New" button
-            itemBuilder: (context, index) {
-              if (index == summaries.length) {
-                // Last item is the "Add New" button
-                return _buildNewSummaryCard(context);
-              }
-              
-              final summary = summaries[index];
-              return _buildSummaryCard(context, summary, index);
+        ...recentSummaries.map((summary) => _buildSummaryCard(context, summary)).toList(),
+        
+        SizedBox(height: 16),
+        
+        // "View All" button
+        if (summaries.length > 3)
+          OutlinedButton(
+            onPressed: () {
+              // Navigate to a view that shows all summaries
             },
+            child: Text('عرض جميع التجارب (${summaries.length})'),
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+          
+        // Start New button  
+        SizedBox(height: 20),
+        ElevatedButton.icon(
+          onPressed: () => context.go('/measurements/instructions'),
+          icon: Icon(Icons.add),
+          label: Text('تجربة جديدة'),
+          style: ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(vertical: 12),
           ),
         ),
       ],
     );
   }
   
-  Widget _buildSummaryCard(BuildContext context, Map<String, dynamic> summary, int index) {
+  Widget _buildSummaryCard(BuildContext context, Map<String, dynamic> summary) {
     final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
     final dynamic timestampValue = summary['timestamp'];
     DateTime timestamp;
@@ -190,85 +432,57 @@ class _HomeScreenState extends State<HomeScreen> {
     
     return Card(
       margin: EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 2,
       child: InkWell(
         onTap: () {
           summaryProvider.setActiveSummary(summary);
           context.go('/summary');
         },
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                  CircleAvatar(
+                    backgroundColor: AppTheme.primaryColor,
+                    child: Icon(
+                      Icons.history,
+                      color: Colors.white,
                     ),
                   ),
-                  SizedBox(width: 16),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'ملخص ${index + 1}',
+                          'تجربة ${_formatDate(timestamp)}',
                           style: TextStyle(
-                            fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'تاريخ الإنشاء: ${_formatDate(timestamp)}',
+                          '${selectedAbayas.length} عباءات مختارة',
                           style: TextStyle(
-                            fontSize: 14,
                             color: Colors.grey[600],
+                            fontSize: 14,
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.person, size: 16, color: Colors.grey[600]),
-                            SizedBox(width: 4),
-                            Text(
-                              '${profile['name'] ?? 'غير محدد'}',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.checkroom, size: 16, color: Colors.grey[600]),
-                            SizedBox(width: 4),
-                            Text(
-                              'العبايات: ${selectedAbayas.length}',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.more_vert),
-                    onPressed: () => _showSummaryOptions(context, summary, index),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 20,
+                    color: Colors.grey,
                   ),
                 ],
               ),
@@ -279,149 +493,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  Widget _buildNewSummaryCard(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.only(bottom: 16),
-      color: Colors.grey[100],
-      child: InkWell(
-        onTap: () => _startNewSummary(context),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Icon(
-                Icons.add_circle,
-                size: 48,
-                color: AppTheme.primaryColor,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'إنشاء ملخص جديد',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  String _formatDate(DateTime timestamp) {
+    return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
   }
-  
-  Widget _buildNewSummaryButton(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: () => _startNewSummary(context),
-      icon: Icon(Icons.add),
-      label: Text('إنشاء ملخص جديد'),
-      style: ElevatedButton.styleFrom(
-        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-      ),
-    );
-  }
-  
-  void _startNewSummary(BuildContext context) {
-    // Reset the current summary to start a fresh one
-    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-    summaryProvider.clearSummary();
-    
-    // Start the measurements flow
-    context.go('/measurements/input');
-  }
-  
-  void _showSummaryOptions(BuildContext context, Map<String, dynamic> summary, int index) {
-    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-    
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(Icons.remove_red_eye),
-            title: Text('عرض الملخص'),
-            onTap: () {
-              Navigator.pop(context);
-              summaryProvider.setActiveSummary(summary);
-              context.go('/summary');
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.edit),
-            title: Text('تعديل الملخص'),
-            onTap: () {
-              Navigator.pop(context);
-              summaryProvider.setActiveSummary(summary);
-              context.go('/measurements/input');
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.content_copy),
-            title: Text('نسخ كملخص جديد'),
-            onTap: () {
-              Navigator.pop(context);
-              summaryProvider.duplicateSummary(summary);
-              context.go('/measurements/input');
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.delete, color: Colors.red),
-            title: Text('حذف الملخص', style: TextStyle(color: Colors.red)),
-            onTap: () {
-              Navigator.pop(context);
-              _confirmDeleteSummary(context, summary);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  void _confirmDeleteSummary(BuildContext context, Map<String, dynamic> summary) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('تأكيد الحذف'),
-        content: Text('هل أنت متأكد من حذف هذا الملخص؟ لا يمكن التراجع عن هذه العملية.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-              await summaryProvider.deleteSummary(summary);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('تم حذف الملخص بنجاح')),
-                );
-              }
-            },
-            child: Text('حذف', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  String _formatDate(dynamic timestamp) {
-  if (timestamp is Timestamp) {
-    // If it's still a Firestore Timestamp
-    return '${timestamp.toDate().day}/${timestamp.toDate().month}/${timestamp.toDate().year}';
-  } else if (timestamp is String) {
-    // If it's an ISO 8601 string timestamp
-    try {
-      final dateTime = DateTime.parse(timestamp);
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    } catch (e) {
-      // Fallback if parsing fails
-      return 'تاريخ غير معروف';
-    }
-  } else {
-    // Fallback for unexpected type
-    return 'تاريخ غير معروف';
-  }
-}
 }

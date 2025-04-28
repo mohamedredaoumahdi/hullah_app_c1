@@ -92,14 +92,23 @@ class SummaryProvider with ChangeNotifier {
         
         // Sort by timestamp if available
         _allUserSummaries.sort((a, b) {
-          final aTimestamp = a['timestamp'] as Timestamp?;
-          final bTimestamp = b['timestamp'] as Timestamp?;
+          final aTimestampStr = a['timestamp'] as String?;
+          final bTimestampStr = b['timestamp'] as String?;
           
-          if (aTimestamp == null && bTimestamp == null) return 0;
-          if (aTimestamp == null) return 1;
-          if (bTimestamp == null) return -1;
-          
-          return bTimestamp.compareTo(aTimestamp); // Descending order
+          // Parse ISO date strings to DateTime for comparison
+          try {
+            if (aTimestampStr == null && bTimestampStr == null) return 0;
+            if (aTimestampStr == null) return 1;
+            if (bTimestampStr == null) return -1;
+            
+            final aDate = DateTime.parse(aTimestampStr);
+            final bDate = DateTime.parse(bTimestampStr);
+            
+            return bDate.compareTo(aDate); // Descending order
+          } catch (e) {
+            // Fallback if there's an error parsing dates
+            return 0;
+          }
         });
         
         // If we don't have an active summary, set the first one as active
@@ -298,58 +307,61 @@ class SummaryProvider with ChangeNotifier {
   }
   
   Future<void> createNewSummary() async {
-  if (_user == null || _firestore == null) {
-    throw Exception('User not authenticated or Firebase not initialized');
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Creating new summary for user: ${_user!.uid}');
+      }
+      
+      // Clear existing summary data
+      _summary = {};
+      _selectedAbayas = [];
+      
+      // Generate a unique ID for this summary
+      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // Fetch measurements
+      final measurementsDoc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
+      
+      // Fetch profile
+      final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
+      
+      // Current timestamp as string instead of FieldValue.serverTimestamp()
+      final timestamp = DateTime.now().toUtc().toIso8601String();
+      
+      // Create new summary
+      _summary = {
+        'id': _activeSummaryId,
+        'userId': _user!.uid,
+        'measurements': measurementsDoc.data() ?? {},
+        'profile': profileDoc.data() ?? {},
+        'selectedAbayas': [],
+        'timestamp': timestamp,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      
+      // Save right away to ensure it's in the list
+      await saveSummary();
+      
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('✅ New summary created successfully with ID: $_activeSummaryId');
+      }
+    } catch (e, stackTrace) {
+      if (_debugMode) {
+        print('❌ Error creating new summary: $e');
+        print('❌ Stack trace: $stackTrace');
+      }
+      
+      _errorMessage = e.toString();
+      notifyListeners();
+      throw e;
+    }
   }
-  
-  try {
-    if (_debugMode) {
-      print('🔍 Creating new summary for user: ${_user!.uid}');
-    }
-    
-    // Clear existing summary data
-    _summary = {};
-    _selectedAbayas = [];
-    
-    // Generate a unique ID for this summary
-    _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
-    
-    // Fetch measurements
-    final measurementsDoc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
-    
-    // Fetch profile
-    final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
-    
-    // Create new summary
-    _summary = {
-      'id': _activeSummaryId,
-      'userId': _user!.uid,
-      'measurements': measurementsDoc.data() ?? {},
-      'profile': profileDoc.data() ?? {},
-      'selectedAbayas': [],
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'createdAt': DateTime.now().millisecondsSinceEpoch,
-    };
-    
-    // Save right away to ensure it's in the list
-    await saveSummary();
-    
-    notifyListeners();
-    
-    if (_debugMode) {
-      print('✅ New summary created successfully with ID: $_activeSummaryId');
-    }
-  } catch (e, stackTrace) {
-    if (_debugMode) {
-      print('❌ Error creating new summary: $e');
-      print('❌ Stack trace: $stackTrace');
-    }
-    
-    _errorMessage = e.toString();
-    notifyListeners();
-    throw e;
-  }
-}
   
   // Duplicate an existing summary
   Future<void> duplicateSummary(Map<String, dynamic> sourceSummary) async {
@@ -365,6 +377,9 @@ class SummaryProvider with ChangeNotifier {
       // Generate a unique ID for the duplicated summary
       _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
       
+      // Current timestamp as string
+      final timestamp = DateTime.now().toUtc().toIso8601String();
+      
       // Create a copy of the source summary
       _summary = {
         'id': _activeSummaryId,
@@ -372,7 +387,7 @@ class SummaryProvider with ChangeNotifier {
         'measurements': sourceSummary['measurements'] ?? {},
         'profile': sourceSummary['profile'] ?? {},
         'selectedAbayas': sourceSummary['selectedAbayas'] ?? [],
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'timestamp': timestamp,
         'createdAt': DateTime.now().millisecondsSinceEpoch,
         'isDuplicate': true,
         'duplicatedFrom': sourceSummary['id'],
@@ -434,13 +449,15 @@ class SummaryProvider with ChangeNotifier {
         _summary!['id'] = _activeSummaryId;
       }
       
-      // Include user ID and timestamp
+      // Include user ID and timestamp as ISO string, not FieldValue.serverTimestamp()
       _summary!['userId'] = _user!.uid;
-      _summary!['timestamp'] = FieldValue.serverTimestamp();
+      _summary!['timestamp'] = DateTime.now().toUtc().toIso8601String();
       
       // First get the current document
       final docRef = _firestore!.collection('my summary').doc(_user!.uid);
       final docSnapshot = await docRef.get();
+      
+      final currentTimestamp = DateTime.now().toUtc().toIso8601String();
       
       if (docSnapshot.exists) {
         final data = docSnapshot.data() ?? {};
@@ -460,14 +477,14 @@ class SummaryProvider with ChangeNotifier {
         // Update the document
         await docRef.update({
           'summaries': summaries,
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'timestamp': currentTimestamp,
         });
       } else {
         // Create new document with this summary
         await docRef.set({
           'userId': _user!.uid,
           'summaries': [_summary],
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'timestamp': currentTimestamp,
         });
       }
       
@@ -519,10 +536,12 @@ class SummaryProvider with ChangeNotifier {
         // Remove the summary with this ID
         summaries.removeWhere((s) => s['id'] == summaryId);
         
-        // Update the document
+        // Update the document with timestamp as string
+        final currentTimestamp = DateTime.now().toUtc().toIso8601String();
+        
         await docRef.update({
           'summaries': summaries,
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'timestamp': currentTimestamp,
         });
         
         // If we just deleted the active summary, clear it
@@ -558,70 +577,70 @@ class SummaryProvider with ChangeNotifier {
   }
   
   Future<void> updateSummary({
-  required List<AbayaModel> selectedAbayas,
-  Map<String, dynamic>? additionalData,
-}) async {
-  if (_user == null || _firestore == null) {
-    throw Exception('User not authenticated or Firebase not initialized');
+    required List<AbayaModel> selectedAbayas,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Updating summary with ${selectedAbayas.length} abayas');
+      }
+      
+      final selectedAbayasData = selectedAbayas.map((abaya) => abaya.toMap()).toList();
+      
+      // If we don't have a summary yet, create a new one
+      if (_summary == null) {
+        await createNewSummary();
+      }
+      
+      // Ensure we have an active summary ID
+      if (_activeSummaryId == null) {
+        _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+      
+      // Update the active summary
+      _selectedAbayas = selectedAbayas;
+      _summary = {
+        ..._summary ?? {},
+        'id': _activeSummaryId,
+        'selectedAbayas': selectedAbayasData,
+        'timestamp': DateTime.now().toUtc().toIso8601String(), // String timestamp, not Firestore FieldValue
+        ...?additionalData,
+      };
+      
+      // Save to Firestore
+      await saveSummary();
+      
+      if (_debugMode) {
+        print('✅ Summary updated successfully');
+        print('🔍 Selected abayas after update: ${_selectedAbayas.length}');
+      }
+      
+      notifyListeners();
+    } catch (e, stackTrace) {
+      if (_debugMode) {
+        print('❌ Error updating summary: $e');
+        print('❌ Stack trace: $stackTrace');
+      }
+      
+      // More detailed error handling
+      String errorMessage = 'Unknown error occurred';
+      if (e is FirebaseException) {
+        errorMessage = 'Firebase error: ${e.message ?? "Unknown Firebase error"}';
+      } else if (e is Exception) {
+        errorMessage = e.toString();
+      }
+      
+      _errorMessage = errorMessage;
+      notifyListeners();
+      
+      // Rethrow to allow caller to handle the error
+      throw Exception(errorMessage);
+    }
   }
-  
-  try {
-    if (_debugMode) {
-      print('🔍 Updating summary with ${selectedAbayas.length} abayas');
-    }
-    
-    final selectedAbayasData = selectedAbayas.map((abaya) => abaya.toMap()).toList();
-    
-    // If we don't have a summary yet, create a new one
-    if (_summary == null) {
-      await createNewSummary();
-    }
-    
-    // Ensure we have an active summary ID
-    if (_activeSummaryId == null) {
-      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
-    }
-    
-    // Update the active summary
-    _selectedAbayas = selectedAbayas;
-    _summary = {
-      ..._summary ?? {},
-      'id': _activeSummaryId,
-      'selectedAbayas': selectedAbayasData,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      ...?additionalData,
-    };
-    
-    // Save to Firestore
-    await saveSummary();
-    
-    if (_debugMode) {
-      print('✅ Summary updated successfully');
-      print('🔍 Selected abayas after update: ${_selectedAbayas.length}');
-    }
-    
-    notifyListeners();
-  } catch (e, stackTrace) {
-    if (_debugMode) {
-      print('❌ Error updating summary: $e');
-      print('❌ Stack trace: $stackTrace');
-    }
-    
-    // More detailed error handling
-    String errorMessage = 'Unknown error occurred';
-    if (e is FirebaseException) {
-      errorMessage = 'Firebase error: ${e.message ?? "Unknown Firebase error"}';
-    } else if (e is Exception) {
-      errorMessage = e.toString();
-    }
-    
-    _errorMessage = errorMessage;
-    notifyListeners();
-    
-    // Rethrow to allow caller to handle the error
-    throw Exception(errorMessage);
-  }
-}
   
   Future<void> updateMeasurements(Map<String, dynamic> measurements) async {
     if (_user == null || _firestore == null) {
