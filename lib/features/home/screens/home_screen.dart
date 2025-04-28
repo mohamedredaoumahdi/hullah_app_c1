@@ -1,5 +1,6 @@
 // lib/features/home/screens/home_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -170,9 +171,22 @@ class _HomeScreenState extends State<HomeScreen> {
   
   Widget _buildSummaryCard(BuildContext context, Map<String, dynamic> summary, int index) {
     final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
-    final timestamp = summary['timestamp']?.toDate() ?? DateTime.now();
+    final dynamic timestampValue = summary['timestamp'];
+    DateTime timestamp;
     final profile = summary['profile'] ?? {};
     final selectedAbayas = summary['selectedAbayas'] ?? [];
+
+    if (timestampValue is Timestamp) {
+      timestamp = timestampValue.toDate();
+    } else if (timestampValue is String) {
+      try {
+        timestamp = DateTime.parse(timestampValue);
+      } catch (e) {
+        timestamp = DateTime.now(); // Fallback for invalid date strings
+      }
+    } else {
+      timestamp = DateTime.now(); // Fallback for null/unexpected types
+    }
     
     return Card(
       margin: EdgeInsets.only(bottom: 16),
@@ -392,8 +406,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  String _formatDate(DateTime date) {
-    // Simple date formatter
-    return '${date.day}/${date.month}/${date.year}';
+  String _formatDate(dynamic timestamp) {
+  if (timestamp is Timestamp) {
+    // If it's still a Firestore Timestamp
+    return '${timestamp.toDate().day}/${timestamp.toDate().month}/${timestamp.toDate().year}';
+  } else if (timestamp is String) {
+    // If it's an ISO 8601 string timestamp
+    try {
+      final dateTime = DateTime.parse(timestamp);
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    } catch (e) {
+      // Fallback if parsing fails
+      return 'تاريخ غير معروف';
+    }
+  } else {
+    // Fallback for unexpected type
+    return 'تاريخ غير معروف';
   }
+}
 }

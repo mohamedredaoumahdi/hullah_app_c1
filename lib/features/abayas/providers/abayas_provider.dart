@@ -322,11 +322,11 @@ class AbayasProvider with ChangeNotifier {
   // Update to AbayasProvider.saveSelectedAbayasToSummary method
 
 Future<void> saveSelectedAbayasToSummary() async {
-  if (_user == null) {
+  if (_user == null || _firestore == null) {
     if (_debugMode) {
-      print('❌ Cannot save selected abayas: User is null');
+      print('❌ Cannot save selected abayas: User is null or Firestore not initialized');
     }
-    return;
+    throw Exception('User not authenticated or Firestore not initialized');
   }
   
   // Reset retry count at the start of the method
@@ -345,7 +345,18 @@ Future<void> saveSelectedAbayasToSummary() async {
       final abaya = await getAbayaById(id);
       if (abaya != null) {
         selectedAbayasData.add(abaya.toMap());
+      } else {
+        if (_debugMode) {
+          print('⚠️ Abaya with ID $id not found');
+        }
       }
+    }
+    
+    if (selectedAbayasData.isEmpty) {
+      if (_debugMode) {
+        print('⚠️ No valid abayas to save');
+      }
+      throw Exception('No valid abayas found to save');
     }
     
     if (_debugMode) {
@@ -354,7 +365,7 @@ Future<void> saveSelectedAbayasToSummary() async {
     
     // Ensure we have a summary ID
     if (_activeSummaryId == null) {
-      _activeSummaryId = 'default-${DateTime.now().millisecondsSinceEpoch}';
+      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
       if (_debugMode) {
         print('🔍 Generated new active summary ID: $_activeSummaryId');
       }
@@ -363,6 +374,8 @@ Future<void> saveSelectedAbayasToSummary() async {
     // First get the current document
     final docRef = _firestore.collection('my summary').doc(_user!.uid);
     final docSnapshot = await docRef.get();
+    
+    final currentTimestamp = DateTime.now().toUtc().toIso8601String();
     
     if (docSnapshot.exists) {
       final data = docSnapshot.data() ?? {};
@@ -376,7 +389,7 @@ Future<void> saveSelectedAbayasToSummary() async {
         final updatedSummary = {
           ...summaries[existingIndex] as Map<String, dynamic>,
           'selectedAbayas': selectedAbayasData,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': currentTimestamp,
         };
         
         summaries[existingIndex] = updatedSummary;
@@ -386,7 +399,7 @@ Future<void> saveSelectedAbayasToSummary() async {
           'id': _activeSummaryId,
           'userId': _user!.uid,
           'selectedAbayas': selectedAbayasData,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': currentTimestamp,
         };
         
         summaries.add(newSummary);
@@ -395,7 +408,7 @@ Future<void> saveSelectedAbayasToSummary() async {
       // Update the document with the updated summaries array
       await docRef.update({
         'summaries': summaries,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': currentTimestamp,
       });
       
       if (_debugMode) {
@@ -410,24 +423,24 @@ Future<void> saveSelectedAbayasToSummary() async {
             'id': _activeSummaryId,
             'userId': _user!.uid,
             'selectedAbayas': selectedAbayasData,
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': currentTimestamp,
           }
         ],
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': currentTimestamp,
       });
       
       if (_debugMode) {
         print('✅ Successfully created new summary document');
       }
     }
-  } catch (e) {
+  } catch (e, stackTrace) {
     if (_debugMode) {
       print('❌ Error saving selected abayas: $e');
+      print('❌ Stack trace: $stackTrace');
     }
     
-    // Remove the retry mechanism to prevent potential infinite loops
-    // Instead, throw the error to be handled by the caller
-    throw e;
+    // Re-throw the error to be handled by the caller
+    rethrow;
   }
 }
 // Load selected abayas for a specific summary within the array

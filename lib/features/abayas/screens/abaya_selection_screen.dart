@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hullah_app/core/utils/network_helper.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
@@ -367,6 +368,19 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
   onPressed: _selectedAbayas.isEmpty
     ? null
     : () async {
+        // Validate internet connection first
+        final hasConnection = await NetworkHelper.hasInternetConnection();
+        
+        if (!hasConnection) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        
         // Show a loading indicator
         _showSavingDialog(context);
         
@@ -374,14 +388,19 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
           final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
           final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
           
-          // Save selected abayas to summary
-          await abayasProvider.saveSelectedAbayasToSummary();
-          
-          // Create or update the summary
+          // Validate selected abayas exist in the recommendations
           final selectedAbayas = abayasProvider.recommendedAbayas
               .where((abaya) => _selectedAbayas.contains(abaya.id))
               .toList();
           
+          if (selectedAbayas.isEmpty) {
+            throw Exception('لم يتم العثور على العبايات المحددة');
+          }
+          
+          // Save selected abayas to summary
+          await abayasProvider.saveSelectedAbayasToSummary();
+          
+          // Update the summary
           await summaryProvider.updateSummary(selectedAbayas: selectedAbayas);
           
           if (mounted) {
@@ -396,15 +415,19 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
             // Dismiss the loading dialog
             Navigator.pop(context);
             
+            // Use NetworkHelper to format error for user
+            final formattedError = NetworkHelper.formatErrorForUser(e);
+            
             // Show error
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('فشل في حفظ العبايات: ${e.toString()}'),
+                content: Text('فشل في حفظ العبايات: $formattedError'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 5),
                 action: SnackBarAction(
-                  label: 'إعادة المحاولة',
+                  label: 'إغلاق',
                   onPressed: () {
-                    // Try again
-                    context.go('/summary');
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   },
                 ),
               ),

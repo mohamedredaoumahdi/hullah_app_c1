@@ -111,7 +111,7 @@ class SummaryProvider with ChangeNotifier {
         await docRef.set({
           'userId': _user!.uid,
           'summaries': [],
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
         });
         
         _allUserSummaries = [];
@@ -327,7 +327,7 @@ class SummaryProvider with ChangeNotifier {
       'measurements': measurementsDoc.data() ?? {},
       'profile': profileDoc.data() ?? {},
       'selectedAbayas': [],
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     };
     
@@ -372,7 +372,7 @@ class SummaryProvider with ChangeNotifier {
         'measurements': sourceSummary['measurements'] ?? {},
         'profile': sourceSummary['profile'] ?? {},
         'selectedAbayas': sourceSummary['selectedAbayas'] ?? [],
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
         'createdAt': DateTime.now().millisecondsSinceEpoch,
         'isDuplicate': true,
         'duplicatedFrom': sourceSummary['id'],
@@ -460,14 +460,14 @@ class SummaryProvider with ChangeNotifier {
         // Update the document
         await docRef.update({
           'summaries': summaries,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
         });
       } else {
         // Create new document with this summary
         await docRef.set({
           'userId': _user!.uid,
           'summaries': [_summary],
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
         });
       }
       
@@ -522,7 +522,7 @@ class SummaryProvider with ChangeNotifier {
         // Update the document
         await docRef.update({
           'summaries': summaries,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
         });
         
         // If we just deleted the active summary, clear it
@@ -588,7 +588,7 @@ class SummaryProvider with ChangeNotifier {
       ..._summary ?? {},
       'id': _activeSummaryId,
       'selectedAbayas': selectedAbayasData,
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
       ...?additionalData,
     };
     
