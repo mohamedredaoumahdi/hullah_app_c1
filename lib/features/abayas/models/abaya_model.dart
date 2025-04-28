@@ -1,3 +1,5 @@
+// lib/features/abayas/models/abaya_model.dart
+
 class AbayaModel {
   final String id;
   final String model;
@@ -32,11 +34,18 @@ class AbayaModel {
   });
 
   factory AbayaModel.fromMap(Map<String, dynamic> map) {
+    // Log warning if image URL is missing
+    final imageUrl = map['image1Url'];
+    if (imageUrl == null || imageUrl == '') {
+      print('⚠️ Warning: Missing image1Url for abaya with id: ${map['id']}');
+    }
+    
+    // Create model with available data
     return AbayaModel(
-      id: map['id'] ?? '',
-      model: map['model'] ?? '',
-      fabric: map['fabric'] ?? '',
-      color: map['color'] ?? '',
+      id: map['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      model: map['model'] ?? 'Unknown Model',
+      fabric: map['fabric'] ?? 'Premium Fabric',
+      color: map['color'] ?? 'Black',
       description: map['description'] ?? '',
       bodyShapeCategory: map['bodyShapeCategory'] ?? '',
       image1Url: map['image1Url'] ?? '',
@@ -69,26 +78,34 @@ class AbayaModel {
     };
   }
 
+  // Get all image URLs
   List<String> get allImageUrls {
     final List<String> urls = [image1Url];
-    if (image2Url != null) urls.add(image2Url!);
-    if (image3Url != null) urls.add(image3Url!);
-    if (image4Url != null) urls.add(image4Url!);
-    if (image5Url != null) urls.add(image5Url!);
-    if (image6Url != null) urls.add(image6Url!);
-    if (image7Url != null) urls.add(image7Url!);
+    if (image2Url != null && image2Url!.isNotEmpty) urls.add(image2Url!);
+    if (image3Url != null && image3Url!.isNotEmpty) urls.add(image3Url!);
+    if (image4Url != null && image4Url!.isNotEmpty) urls.add(image4Url!);
+    if (image5Url != null && image5Url!.isNotEmpty) urls.add(image5Url!);
+    if (image6Url != null && image6Url!.isNotEmpty) urls.add(image6Url!);
+    if (image7Url != null && image7Url!.isNotEmpty) urls.add(image7Url!);
     return urls;
   }
   
-  // IMPROVED: Enhanced method to handle various Google Drive URL formats
+  // FIXED: Enhanced method to handle various image URL formats
   String getAccessibleImageUrl(String originalUrl) {
     // Skip processing if empty
     if (originalUrl.isEmpty) {
       return 'https://via.placeholder.com/400x600?text=No+Image';
     }
     
-    // Handle data URLs (base64)
-    if (originalUrl.startsWith('data:')) {
+    // FIX: Handle double data prefix - check for duplicated prefix
+    if (originalUrl.startsWith('data:image/jpeg;base64,data:image/')) {
+      // Fix by removing the duplicate prefix
+      final fixedUrl = originalUrl.replaceFirst('data:image/jpeg;base64,', '');
+      return fixedUrl;
+    }
+    
+    // Handle data URLs (base64) - return as-is
+    if (originalUrl.startsWith('data:image/')) {
       return originalUrl;
     }
     
@@ -147,12 +164,12 @@ class AbayaModel {
   // Get all image URLs in accessible format
   List<String> get accessibleImageUrls {
     final List<String> urls = [accessibleImage1Url];
-    if (image2Url != null) urls.add(getAccessibleImageUrl(image2Url!));
-    if (image3Url != null) urls.add(getAccessibleImageUrl(image3Url!));
-    if (image4Url != null) urls.add(getAccessibleImageUrl(image4Url!));
-    if (image5Url != null) urls.add(getAccessibleImageUrl(image5Url!));
-    if (image6Url != null) urls.add(getAccessibleImageUrl(image6Url!));
-    if (image7Url != null) urls.add(getAccessibleImageUrl(image7Url!));
+    if (image2Url != null && image2Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image2Url!));
+    if (image3Url != null && image3Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image3Url!));
+    if (image4Url != null && image4Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image4Url!));
+    if (image5Url != null && image5Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image5Url!));
+    if (image6Url != null && image6Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image6Url!));
+    if (image7Url != null && image7Url!.isNotEmpty) urls.add(getAccessibleImageUrl(image7Url!));
     return urls;
   }
 }

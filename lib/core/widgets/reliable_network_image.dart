@@ -1,5 +1,6 @@
 // lib/core/widgets/reliable_network_image.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
@@ -26,25 +27,31 @@ class ReliableNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Handle empty URLs immediately
+    if (imageUrl.isEmpty) {
+      if (debug) print('🖼️ Empty image URL provided');
+      return _buildPlaceholder(context);
+    }
+    
+    // Handle base64 data URLs directly without using CachedNetworkImage
+    if (imageUrl.startsWith('data:image')) {
+      return _buildBase64Image(context);
+    }
+    
     // Generate a cache key that includes dimensions to avoid cache conflicts
     final cacheKey = 'img_${imageUrl.hashCode}_${width ?? 0}_${height ?? 0}';
     
     if (debug) {
       print('🖼️ Building image: $altText');
-      print('🖼️ URL: $imageUrl');
+      print('🖼️ URL: ${_truncateForLog(imageUrl)}');
       print('🖼️ Cache key: $cacheKey');
-    }
-    
-    // Handle empty URLs immediately
-    if (imageUrl.isEmpty) {
-      return _buildPlaceholder(context);
     }
     
     // For Google Drive URLs, check if we need to transform them
     final effectiveUrl = _getEffectiveUrl(imageUrl);
     
     if (debug && effectiveUrl != imageUrl) {
-      print('🖼️ Transformed URL: $effectiveUrl');
+      print('🖼️ Transformed URL: ${_truncateForLog(effectiveUrl)}');
     }
 
     return CachedNetworkImage(
@@ -56,21 +63,108 @@ class ReliableNetworkImage extends StatelessWidget {
       errorWidget: (context, url, error) {
         if (debug) {
           print('🖼️ Error loading image: $error');
-          print('🖼️ Failed URL: $url');
+          print('🖼️ Failed URL: ${_truncateForLog(url)}');
         }
         return _buildErrorWidget(context, error);
       },
-      // Advanced caching options
       cacheKey: cacheKey,
       memCacheWidth: width?.toInt(),
       memCacheHeight: height?.toInt(),
-      maxWidthDiskCache: 800,
-      maxHeightDiskCache: 1200,
       httpHeaders: {
         'Accept': '*/*',
         'User-Agent': 'Hullah App',
       },
     );
+  }
+  
+  // Handle base64 images properly
+  Widget _buildBase64Image(BuildContext context) {
+    try {
+      if (debug) {
+        print('🖼️ Processing base64 image for: $altText');
+      }
+      
+      // FIX: Handle potential duplicate data prefixes
+      String processedUrl = imageUrl;
+      if (imageUrl.startsWith('data:image/jpeg;base64,data:image/')) {
+        // Fix by removing the duplicate prefix
+        processedUrl = imageUrl.replaceFirst('data:image/jpeg;base64,', '');
+        if (debug) {
+          print('🖼️ Fixed duplicate data prefix in URL');
+        }
+      }
+      
+      // Extract the actual base64 string from data URL
+      final dataUri = Uri.parse(processedUrl);
+      final isDataScheme = dataUri.scheme == 'data';
+      
+      if (!isDataScheme) {
+        if (debug) print('🖼️ Invalid data URI scheme');
+        return _buildErrorWidget(context, 'Invalid data URI');
+      }
+      
+      // Parse the media type and encoding
+      final uriWithoutScheme = processedUrl.substring(5); // Remove 'data:'
+      final commaIndex = uriWithoutScheme.indexOf(',');
+      
+      if (commaIndex == -1) {
+        if (debug) print('🖼️ No comma in data URI');
+        return _buildErrorWidget(context, 'Invalid data URI format');
+      }
+      
+      final metadata = uriWithoutScheme.substring(0, commaIndex);
+      final data = uriWithoutScheme.substring(commaIndex + 1);
+      
+      if (debug) {
+        print('🖼️ Data URI metadata: $metadata');
+        print('🖼️ Base64 length: ${data.length}');
+      }
+      
+      // Check if this is indeed a base64 encoded image
+      if (!metadata.contains('image/')) {
+        if (debug) print('🖼️ Not an image data URI');
+        return _buildErrorWidget(context, 'Not an image data URI');
+      }
+      
+      // Minimum length check
+      if (data.length < 10) {
+        if (debug) print('🖼️ Base64 data too short');
+        return _buildErrorWidget(context, 'Base64 data too short');
+      }
+      
+      try {
+        // Try to decode the base64 data
+        final bytes = base64.decode(data);
+        if (bytes.isEmpty) {
+          if (debug) print('🖼️ Decoded base64 to empty bytes');
+          return _buildErrorWidget(context, 'Empty image data');
+        }
+        
+        // Return an image from memory
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: width,
+          height: height,
+          errorBuilder: (context, error, stackTrace) {
+            if (debug) {
+              print('🖼️ Error displaying memory image: $error');
+            }
+            return _buildErrorWidget(context, error);
+          },
+        );
+      } catch (e) {
+        if (debug) {
+          print('🖼️ Base64 decode error: $e');
+        }
+        return _buildErrorWidget(context, 'Invalid base64 data: $e');
+      }
+    } catch (e) {
+      if (debug) {
+        print('🖼️ Error processing data URI: $e');
+      }
+      return _buildErrorWidget(context, e);
+    }
   }
   
   // Helper to transform Google Drive URLs
@@ -198,5 +292,13 @@ class ReliableNetworkImage extends StatelessWidget {
         ),
       ),
     );
+  }
+  
+  // Helper to truncate long URLs for logging
+  String _truncateForLog(String text) {
+    if (text.length > 100) {
+      return '${text.substring(0, 100)}...';
+    }
+    return text;
   }
 }

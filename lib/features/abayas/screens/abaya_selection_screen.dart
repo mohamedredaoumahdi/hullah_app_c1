@@ -1,10 +1,9 @@
+// lib/features/abayas/screens/abaya_selection_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hullah_app/core/widgets/image_diagnostic_widget.dart';
-import 'package:hullah_app/features/abayas/models/abaya_model.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/abayas_provider.dart';
@@ -28,21 +27,24 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    // Use addPostFrameCallback to avoid calling setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAbayas();
     });
   }
 
-  void _showImageDiagnosticScreen(BuildContext context, AbayaModel abaya) {
-  // Show the image diagnostic screen
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (context) => ImageDiagnosticWidget(
-        originalUrl: abaya.image1Url,
-      ),
-    ),
-  );
-}
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Get current selected abaya IDs from provider
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+    if (abayasProvider.selectedAbayaIds.isNotEmpty) {
+      setState(() {
+        _selectedAbayas = Set<String>.from(abayasProvider.selectedAbayaIds);
+      });
+    }
+  }
 
   Future<void> _loadAbayas() async {
     if (!mounted) return;
@@ -66,10 +68,17 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
       
       if (_debugMode) {
         print('⚙️ Loaded ${abayasProvider.recommendedAbayas.length} abayas');
+        
         // Log the first abaya for inspection if available
         if (abayasProvider.recommendedAbayas.isNotEmpty) {
           final firstAbaya = abayasProvider.recommendedAbayas.first;
-          print('⚙️ First abaya: id=${firstAbaya.id}, model=${firstAbaya.model}, image=${firstAbaya.image1Url}');
+          print('⚙️ First abaya: id=${firstAbaya.id}, model=${firstAbaya.model}');
+          
+          // Log truncated image URL
+          final imagePreview = firstAbaya.image1Url.length > 100 ? 
+            '${firstAbaya.image1Url.substring(0, 100)}...' : 
+            firstAbaya.image1Url;
+          print('⚙️ First abaya image preview: $imagePreview');
         }
       }
       
@@ -94,6 +103,24 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
     }
   }
 
+  Future<void> _forceRefreshAbayas() async {
+    if (_debugMode) {
+      print('🔄 Force refreshing abayas');
+    }
+    
+    setState(() {
+      _isRetrying = true;
+    });
+    
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+    abayasProvider.clearCache(); // Clear the cache to force a reload
+    await _loadAbayas();
+    
+    setState(() {
+      _isRetrying = false;
+    });
+  }
+
   void _toggleSelection(String abayaId) {
     setState(() {
       if (_selectedAbayas.contains(abayaId)) {
@@ -106,27 +133,11 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
     Provider.of<AbayasProvider>(context, listen: false)
         .updateSelectedAbayas(_selectedAbayas);
   }
-  
-  Future<bool> _showExitConfirmationDialog() async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('تأكيد الخروج'),
-        content: Text(_selectedAbayas.isNotEmpty 
-          ? 'هل أنت متأكدة من الخروج؟ سيتم فقدان العبايات المختارة.' 
-          : 'هل أنت متأكدة من الخروج؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('خروج', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    ) ?? false;
+
+  @override
+  void dispose() {
+    // Clean up any controllers or resources here
+    super.dispose();
   }
 
   @override
@@ -167,8 +178,8 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
             ),
           ),
           
-          // Debug info section (only visible in debug mode)
-          if (_debugMode && _errorMessage != null)
+          // Error/Debug info section
+          if (_errorMessage != null)
             Container(
               margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               padding: EdgeInsets.all(8),
@@ -181,19 +192,26 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '❌ Debug Error:',
+                    'خطأ:',
                     style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                   ),
                   SizedBox(height: 4),
                   Text(_errorMessage!, style: TextStyle(color: Colors.red.shade700)),
                   SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _loadAbayas,
+                  ElevatedButton.icon(
+                    onPressed: _isRetrying ? null : _forceRefreshAbayas,
+                    icon: _isRetrying 
+                        ? SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(Icons.refresh),
+                    label: Text(_isRetrying ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red.shade100,
                       foregroundColor: Colors.red.shade700,
                     ),
-                    child: Text('Retry Loading'),
                   ),
                 ],
               ),
@@ -236,7 +254,7 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                           ),
                           SizedBox(height: 16),
                           ElevatedButton.icon(
-                            onPressed: _loadAbayas,
+                            onPressed: _forceRefreshAbayas,
                             icon: Icon(Icons.refresh),
                             label: Text('إعادة المحاولة'),
                           ),
@@ -253,78 +271,21 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                       ),
                       itemCount: abayasProvider.recommendedAbayas.length,
                       itemBuilder: (context, index) {
-  final abaya = abayasProvider.recommendedAbayas[index];
-  final isSelected = _selectedAbayas.contains(abaya.id);
-  
-  return InkWell(
-    onTap: () => _toggleSelection(abaya.id),
-    borderRadius: BorderRadius.circular(12),
-    child: Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSelected
-              ? AppTheme.accentColor
-              : Colors.transparent,
-          width: 3,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: _buildAbayaImage(abaya, index),
-                ),
-                if (isSelected)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.check, color: Colors.white, size: 18),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  abaya.model,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '${abaya.fabric} - ${abaya.color}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+                        final abaya = abayasProvider.recommendedAbayas[index];
+                        final isSelected = _selectedAbayas.contains(abaya.id);
+                        
+                        return AbayaCardItem(
+                          abaya: abaya,
+                          isSelected: isSelected,
+                          onTap: () => _toggleSelection(abaya.id),
+                          debug: _debugMode,
+                          index: index,
+                        );
+                      },
                     ),
           ),
           
+          // Bottom selection bar
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -382,20 +343,158 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
       ),
     );
   }
-  
-  Widget _buildAbayaImage(AbayaModel abaya, int index) {
-  if (_debugMode) {
-    print('⚙️ Building image for index $index: ${abaya.model}');
-  }
-  
-  return ReliableNetworkImage(
-    imageUrl: abaya.accessibleImage1Url,
-    altText: abaya.model,
-    showErrors: _debugMode, // Only show detailed errors in debug mode
-    debug: _debugMode,
-  );
 }
-  
-  // Helper function
-  int min(int a, int b) => a < b ? a : b;
+
+// Extracted AbayaCardItem for cleaner code and better encapsulation
+class AbayaCardItem extends StatelessWidget {
+  final dynamic abaya;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool debug;
+  final int index;
+
+  const AbayaCardItem({
+    Key? key,
+    required this.abaya,
+    required this.isSelected,
+    required this.onTap,
+    this.debug = false,
+    required this.index,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // Check if we have valid data
+    final model = abaya.model ?? 'عباية';
+    final fabric = abaya.fabric ?? '';
+    final color = abaya.color ?? '';
+    
+    if (debug) {
+      print('⚙️ Building abaya card for index $index: $model');
+    }
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.accentColor
+                : Colors.transparent,
+            width: 3,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _buildAbayaImage(context),
+                  ),
+                  if (isSelected)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.check, color: Colors.white, size: 18),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (fabric.isNotEmpty || color.isNotEmpty)
+                    Text(
+                      [if (fabric.isNotEmpty) fabric, if (color.isNotEmpty) color]
+                          .join(' - '),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAbayaImage(BuildContext context) {
+    try {
+      if (abaya.accessibleImage1Url == null || abaya.accessibleImage1Url.isEmpty) {
+        if (debug) {
+          print('⚠️ Empty image URL for abaya at index $index');
+        }
+        return Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image_not_supported, color: Colors.grey[500], size: 40),
+                SizedBox(height: 8),
+                Text(
+                  'لا توجد صورة',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      
+      // Use the improved ReliableNetworkImage for better error handling
+      return ReliableNetworkImage(
+        imageUrl: abaya.accessibleImage1Url ?? abaya.image1Url ?? '',
+        altText: abaya.model ?? 'عباية',
+        fit: BoxFit.cover,
+        showErrors: debug,
+        debug: debug,
+      );
+    } catch (e) {
+      if (debug) {
+        print('❌ Error building image for abaya at index $index: $e');
+      }
+      return Container(
+        color: Colors.red[100],
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: Colors.red[700], size: 40),
+              SizedBox(height: 8),
+              Text(
+                'خطأ في تحميل الصورة',
+                style: TextStyle(color: Colors.red[700]),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
 }

@@ -1,3 +1,5 @@
+// lib/core/services/api_service.dart
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -5,6 +7,7 @@ import '../constants/api_constants.dart';
 
 class ApiService {
   static const String baseUrl = ApiConstants.baseUrl;
+  static const bool _debugMode = true; // Set to false in production
   
   // Map to convert English body types to Arabic
   static const Map<String, String> bodyTypeTranslations = {
@@ -31,6 +34,13 @@ class ApiService {
     Map<String, dynamic>? manualMeasurements,
   }) async {
     try {
+      if (_debugMode) {
+        print('🔍 API: Processing measurements');
+        print('🔍 Height: $userHeightCm cm');
+        if (image != null) print('🔍 Using image file: ${image.path}');
+        if (manualMeasurements != null) print('🔍 Using manual measurements with ${manualMeasurements.length} fields');
+      }
+      
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl${ApiConstants.processMeasurements}'),
@@ -60,6 +70,10 @@ class ApiService {
         };
         
         request.fields['manual_measurements'] = jsonEncode(apiMeasurements);
+        
+        if (_debugMode) {
+          print('🔍 Sending measurements to API: ${request.fields['manual_measurements']}');
+        }
       }
       
       // Set a longer timeout for the request
@@ -72,8 +86,16 @@ class ApiService {
       
       var response = await http.Response.fromStream(streamedResponse);
       
+      if (_debugMode) {
+        print('🔍 API response status: ${response.statusCode}');
+      }
+      
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
+        if (_debugMode) {
+          print('🔍 API response data keys: ${data.keys.join(', ')}');
+        }
+        
         if (data['results'] != null && data['results'].isNotEmpty) {
           var result = data['results'][0];
           
@@ -108,11 +130,15 @@ class ApiService {
         var error = jsonDecode(response.body);
         throw Exception('Validation error: ${error['detail']}');
       } else {
-        print('API error response: ${response.body}');
+        if (_debugMode) {
+          print('❌ API error response: ${response.body}');
+        }
         throw Exception('Failed to process measurements: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error processing measurements: $e');
+      if (_debugMode) {
+        print('❌ Error processing measurements: $e');
+      }
       rethrow;
     }
   }
@@ -120,8 +146,16 @@ class ApiService {
   // Get abaya recommendations based on body type
   static Future<List<Map<String, dynamic>>> recommendAbayas(String bodyShape) async {
     try {
+      if (_debugMode) {
+        print('🔍 API: Recommending abayas for body shape: $bodyShape');
+      }
+      
       // Convert Arabic body type to English for API request
       String englishBodyType = bodyTypeToEnglish[bodyShape] ?? bodyShape;
+      
+      if (_debugMode) {
+        print('🔍 Translated body type to English: $englishBodyType');
+      }
       
       final response = await http.post(
         Uri.parse('$baseUrl${ApiConstants.recommendAbaya}'),
@@ -139,12 +173,58 @@ class ApiService {
         },
       );
       
+      if (_debugMode) {
+        print('🔍 API response status: ${response.statusCode}');
+      }
+      
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
+        
+        if (_debugMode) {
+          print('🔍 API response data keys: ${data.keys.join(', ')}');
+          if (data['recommendations'] != null) {
+            print('🔍 Received ${data['recommendations'].length} recommendations');
+          }
+        }
+        
         var recommendations = List<Map<String, dynamic>>.from(data['recommendations'] ?? []);
         
-        // Translate body types back to Arabic in the response
+        // Process and fix the base64 images
         for (var recommendation in recommendations) {
+          // Make sure image_base64 is valid
+          if (recommendation['image_base64'] != null) {
+            var base64Str = recommendation['image_base64'] as String;
+            
+            // IMPORTANT FIX: Check if the base64 string already has the data URL prefix
+            if (base64Str.startsWith('data:image/')) {
+              if (_debugMode) print('🔍 Image is already in data URL format');
+              continue; // Already in the correct format
+            }
+            
+            // Clean the base64 string - remove any whitespace
+            base64Str = base64Str.trim();
+            
+            try {
+              // Test if it's valid base64
+              base64.decode(base64Str);
+              
+              // Convert to a proper data URL
+              recommendation['image_base64'] = 'data:image/jpeg;base64,$base64Str';
+              
+              if (_debugMode) {
+                final preview = base64Str.length > 20 ? base64Str.substring(0, 20) + '...' : base64Str;
+                print('🔍 Converted base64 to data URL. Preview: $preview');
+              }
+            } catch (e) {
+              if (_debugMode) {
+                print('❌ Invalid base64 data: $e');
+              }
+              // Remove invalid base64 data
+              recommendation['image_base64'] = null;
+            }
+          }
+          
+          // Translate body types back to Arabic in the response
           if (recommendation['body_type'] != null) {
             String bodyType = recommendation['body_type'];
             recommendation['body_type'] = bodyTypeTranslations[bodyType] ?? bodyType;
@@ -156,12 +236,26 @@ class ApiService {
         var error = jsonDecode(response.body);
         throw Exception('Validation error: ${error['detail']}');
       } else {
-        print('API error response: ${response.body}');
+        if (_debugMode) {
+          print('❌ API error response: ${response.body}');
+        }
         throw Exception('Failed to get recommendations: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error getting recommendations: $e');
+      if (_debugMode) {
+        print('❌ Error getting recommendations: $e');
+      }
       rethrow;
+    }
+  }
+  
+  // Helper function to check if a string is valid base64
+  static bool isValidBase64(String str) {
+    try {
+      base64.decode(str);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

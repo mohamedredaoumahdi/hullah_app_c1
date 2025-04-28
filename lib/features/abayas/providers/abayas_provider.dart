@@ -1,8 +1,8 @@
-// Enhanced AbayasProvider with debugging
+// lib/features/abayas/providers/abayas_provider.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:convert';
 import '../models/abaya_model.dart';
 import '../../auth/providers/auth_provider.dart' as app_auth;
 import '../../../core/services/api_service.dart';
@@ -17,6 +17,10 @@ class AbayasProvider with ChangeNotifier {
   String? _errorMessage;
   bool _debugMode = true; // Enable debug mode
   
+  // Cache management
+  bool _hasApiDataCache = false;
+  String? _cachedBodyShape;
+  
   List<AbayaModel> get recommendedAbayas => _recommendedAbayas;
   Set<String> get selectedAbayaIds => _selectedAbayaIds;
   bool get isLoading => _isLoading;
@@ -29,13 +33,24 @@ class AbayasProvider with ChangeNotifier {
   
   // Load abayas with optional body shape filtering
   Future<void> loadRecommendedAbayas({String? bodyShape}) async {
+    // If we already have API data cached for this body shape, use it
+    if (_hasApiDataCache && _recommendedAbayas.isNotEmpty && 
+        bodyShape != null && _cachedBodyShape == bodyShape) {
+      if (_debugMode) {
+        print('📦 Using cached abayas data for body shape: $bodyShape');
+      }
+      // Just notify listeners that we're using cached data
+      notifyListeners();
+      return;
+    }
+    
     _isLoading = true;
     _errorMessage = null;
     notifyListeners(); // Notify listeners to show loading state
     
     try {
       if (_debugMode) {
-        print('🔍 AbayasProvider: Starting to load abayas');
+        print('⚙️ Loading abayas for body shape: $bodyShape');
         print('🔍 User ID: ${_user?.uid}');
         print('🔍 Body shape filter: $bodyShape');
       }
@@ -57,8 +72,12 @@ class AbayasProvider with ChangeNotifier {
           }
           
           if (recommendations.isNotEmpty) {
+            // Process and create AbayaModel objects
             _recommendedAbayas = recommendations.map((rec) {
-              // Convert API recommendation to AbayaModel
+              // Get the image URL directly without creating additional prefixes
+              String imageUrl = rec['image_base64'] ?? '';
+                            
+              // Create AbayaModel with the correct URL
               final model = AbayaModel(
                 id: rec['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
                 model: rec['style'] ?? 'Style ${rec['id'] ?? ''}',
@@ -66,21 +85,29 @@ class AbayasProvider with ChangeNotifier {
                 color: 'Black', // Default values
                 description: rec['description'] ?? '',
                 bodyShapeCategory: rec['body_type'] ?? bodyShape,
-                image1Url: rec['image_base64'] != null ? 
-                  'data:image/jpeg;base64,${rec['image_base64']}' : 
-                  'https://via.placeholder.com/300',
+                image1Url: imageUrl,
               );
               
               if (_debugMode) {
                 print('🔍 Created AbayaModel from API data:');
                 print('🔍 ID: ${model.id}, Model: ${model.model}');
-                print('🔍 Image URL: ${model.image1Url.substring(0, min(model.image1Url.length, 50))}...');
+                
+                // Just print a short preview of the image URL to avoid flooding logs
+                final imagePreview = imageUrl.length > 50 ? 
+                  imageUrl.substring(0, 50) + '...' : 
+                  imageUrl;
+                print('🔍 Image URL: $imagePreview');
               }
               
               return model;
             }).toList();
             
+            // Set the cache flag and remember the body shape
+            _hasApiDataCache = true;
+            _cachedBodyShape = bodyShape;
+            
             if (_debugMode) {
+              print('📦 Caching API data for body shape: $bodyShape');
               print('✅ Successfully loaded ${_recommendedAbayas.length} abayas from API');
             }
             
@@ -124,6 +151,9 @@ class AbayasProvider with ChangeNotifier {
           
           // Process Firestore results
           _processFirestoreResults(snapshot);
+          
+          // If Firestore succeeded, cache the body shape
+          _cachedBodyShape = bodyShape;
           
         } catch (firestoreError) {
           if (_debugMode) {
@@ -350,35 +380,13 @@ class AbayasProvider with ChangeNotifier {
     }
   }
   
-  // Method to get user's body shape - could be used if needed
-  Future<String?> _getUserBodyShape() async {
-    if (_user == null) return null;
-    
-    try {
-      if (_debugMode) {
-        print('🔍 Getting user body shape for user: ${_user!.uid}');
-      }
-      
-      final doc = await _firestore.collection('my measurements').doc(_user!.uid).get();
-      if (doc.exists && doc.data()?['bodyShape'] != null) {
-        final bodyShape = doc.data()!['bodyShape'] as String;
-        
-        if (_debugMode) {
-          print('✅ Found user body shape: $bodyShape');
-        }
-        
-        return bodyShape;
-      } else {
-        if (_debugMode) {
-          print('ℹ️ No body shape found for user');
-        }
-      }
-    } catch (e) {
-      if (_debugMode) {
-        print('❌ Error getting user body shape: $e');
-      }
+  // Clear the cache to force a reload of data
+  void clearCache() {
+    _hasApiDataCache = false;
+    _cachedBodyShape = null;
+    if (_debugMode) {
+      print('📦 Abaya data cache cleared');
     }
-    return null;
   }
   
   void clearSelection() {
@@ -397,57 +405,6 @@ class AbayasProvider with ChangeNotifier {
     
     _errorMessage = null;
     notifyListeners();
-  }
-  
-  // Debug method to inspect image URLs
-  void debugInspectImageUrls() {
-    if (!_debugMode) return;
-    
-    print('🔎 DEBUG IMAGE URL INSPECTION 🔎');
-    print('Total abayas: ${_recommendedAbayas.length}');
-    
-    for (int i = 0; i < _recommendedAbayas.length; i++) {
-      final abaya = _recommendedAbayas[i];
-      print('Abaya $i | ID: ${abaya.id} | Model: ${abaya.model}');
-      print('Image URL: ${abaya.image1Url}');
-      
-      // Check if URL looks valid
-      if (abaya.image1Url.isEmpty) {
-        print('⚠️ Empty image URL!');
-      } else if (abaya.image1Url.startsWith('data:image')) {
-        print('💡 Base64 image detected, length: ${abaya.image1Url.length}');
-        
-        // Check if base64 part looks valid
-        final parts = abaya.image1Url.split(',');
-        if (parts.length < 2) {
-          print('⚠️ Invalid base64 image format!');
-        } else {
-          final base64Data = parts[1];
-          if (base64Data.length < 10) {
-            print('⚠️ Base64 data too short! Length: ${base64Data.length}');
-          } else {
-            print('✅ Base64 format seems valid');
-          }
-        }
-      } else if (abaya.image1Url.startsWith('http')) {
-        print('💡 HTTP URL detected');
-        
-        // Check common issues with URLs
-        if (abaya.image1Url.contains(' ')) {
-          print('⚠️ URL contains spaces!');
-        }
-        if (!abaya.image1Url.startsWith('https:') && !abaya.image1Url.startsWith('http:')) {
-          print('⚠️ URL missing protocol!');
-        }
-        if (abaya.image1Url.contains('localhost') || abaya.image1Url.contains('127.0.0.1')) {
-          print('⚠️ URL points to localhost!');
-        }
-      } else {
-        print('⚠️ Unknown URL format!');
-      }
-      
-      print('---------------------------------------');
-    }
   }
   
   // Helper function for min
