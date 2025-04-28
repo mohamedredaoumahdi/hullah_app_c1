@@ -17,24 +17,41 @@ class AbayasProvider with ChangeNotifier {
   String? _errorMessage;
   bool _debugMode = true; // Enable debug mode
   
+  // Retry mechanism
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
+  
   // Cache management
   bool _hasApiDataCache = false;
   String? _cachedBodyShape;
+  String? _activeSummaryId; // ID of the active summary document
   
   List<AbayaModel> get recommendedAbayas => _recommendedAbayas;
   Set<String> get selectedAbayaIds => _selectedAbayaIds;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  int get retryCount => _retryCount;
   
   void updateAuth(app_auth.AuthProvider authProvider) {
     _user = authProvider.user;
     notifyListeners();
   }
   
+  // Set the active summary ID for context
+  void setActiveSummaryId(String? summaryId) {
+    if (_activeSummaryId != summaryId) {
+      _activeSummaryId = summaryId;
+      
+      if (_debugMode) {
+        print('🔍 Abayas Provider: Set active summary ID: $summaryId');
+      }
+    }
+  }
+  
   // Load abayas with optional body shape filtering
-  Future<void> loadRecommendedAbayas({String? bodyShape}) async {
+  Future<void> loadRecommendedAbayas({String? bodyShape, bool forceRefresh = false}) async {
     // If we already have API data cached for this body shape, use it
-    if (_hasApiDataCache && _recommendedAbayas.isNotEmpty && 
+    if (!forceRefresh && _hasApiDataCache && _recommendedAbayas.isNotEmpty && 
         bodyShape != null && _cachedBodyShape == bodyShape) {
       if (_debugMode) {
         print('📦 Using cached abayas data for body shape: $bodyShape');
@@ -53,6 +70,7 @@ class AbayasProvider with ChangeNotifier {
         print('⚙️ Loading abayas for body shape: $bodyShape');
         print('🔍 User ID: ${_user?.uid}');
         print('🔍 Body shape filter: $bodyShape');
+        print('🔍 Active summary ID: $_activeSummaryId');
       }
       
       if (bodyShape != null && bodyShape.isNotEmpty) {
@@ -105,6 +123,7 @@ class AbayasProvider with ChangeNotifier {
             // Set the cache flag and remember the body shape
             _hasApiDataCache = true;
             _cachedBodyShape = bodyShape;
+            _retryCount = 0; // Reset retry counter on successful API call
             
             if (_debugMode) {
               print('📦 Caching API data for body shape: $bodyShape');
@@ -154,12 +173,28 @@ class AbayasProvider with ChangeNotifier {
           
           // If Firestore succeeded, cache the body shape
           _cachedBodyShape = bodyShape;
+          _retryCount = 0; // Reset retry counter on successful Firestore query
           
         } catch (firestoreError) {
           if (_debugMode) {
             print('❌ Firestore query error: $firestoreError');
           }
-          throw firestoreError; // Rethrow to be caught by outer try/catch
+          
+          _retryCount++;
+          if (_retryCount < _maxRetries) {
+            if (_debugMode) {
+              print('🔄 Retry attempt $_retryCount for loading abayas');
+            }
+            
+            // Wait a bit before retrying
+            await Future.delayed(Duration(seconds: 2 * _retryCount));
+            
+            // Try again with the same parameters
+            await loadRecommendedAbayas(bodyShape: bodyShape, forceRefresh: forceRefresh);
+            return;
+          }
+          
+          throw firestoreError; // Rethrow if max retries reached
         }
       } else {
         // No body shape filter, get all abayas
@@ -179,7 +214,22 @@ class AbayasProvider with ChangeNotifier {
           if (_debugMode) {
             print('❌ Firestore query error: $firestoreError');
           }
-          throw firestoreError; // Rethrow to be caught by outer try/catch
+          
+          _retryCount++;
+          if (_retryCount < _maxRetries) {
+            if (_debugMode) {
+              print('🔄 Retry attempt $_retryCount for loading abayas');
+            }
+            
+            // Wait a bit before retrying
+            await Future.delayed(Duration(seconds: 2 * _retryCount));
+            
+            // Try again with the same parameters
+            await loadRecommendedAbayas(bodyShape: bodyShape, forceRefresh: forceRefresh);
+            return;
+          }
+          
+          throw firestoreError; // Rethrow if max retries reached
         }
       }
       
@@ -324,6 +374,20 @@ class AbayasProvider with ChangeNotifier {
       if (_debugMode) {
         print('❌ Error getting abaya by id $id: $e');
       }
+      
+      _retryCount++;
+      if (_retryCount < _maxRetries) {
+        if (_debugMode) {
+          print('🔄 Retry attempt $_retryCount for getting abaya');
+        }
+        
+        // Wait a bit before retrying
+        await Future.delayed(Duration(seconds: 2 * _retryCount));
+        
+        // Try again
+        return getAbayaById(id);
+      }
+      
       return null;
     }
   }
@@ -337,53 +401,234 @@ class AbayasProvider with ChangeNotifier {
     notifyListeners();
   }
   
-  Future<void> saveSelectedAbayasToSummary() async {
-    if (_user == null) {
-      if (_debugMode) {
-        print('❌ Cannot save selected abayas: User is null');
+  // Update to AbayasProvider.saveSelectedAbayasToSummary method
+
+Future<void> saveSelectedAbayasToSummary() async {
+  if (_user == null) {
+    if (_debugMode) {
+      print('❌ Cannot save selected abayas: User is null');
+    }
+    return;
+  }
+  
+  if (_debugMode) {
+    print('🔍 Saving selected abayas to summary for user: ${_user!.uid}');
+    print('🔍 Selected abaya IDs: ${_selectedAbayaIds.join(', ')}');
+    print('🔍 Active summary ID: $_activeSummaryId');
+  }
+  
+  try {
+    final List<Map<String, dynamic>> selectedAbayasData = [];
+    
+    for (final id in _selectedAbayaIds) {
+      final abaya = await getAbayaById(id);
+      if (abaya != null) {
+        selectedAbayasData.add(abaya.toMap());
       }
-      return;
     }
     
     if (_debugMode) {
-      print('🔍 Saving selected abayas to summary for user: ${_user!.uid}');
-      print('🔍 Selected abaya IDs: ${_selectedAbayaIds.join(', ')}');
+      print('🔍 Prepared ${selectedAbayasData.length} abaya objects for saving');
     }
     
-    try {
-      final List<Map<String, dynamic>> selectedAbayasData = [];
+    // First get the current document
+    final docRef = _firestore.collection('my summary').doc(_user!.uid);
+    final docSnapshot = await docRef.get();
+    
+    if (docSnapshot.exists) {
+      final data = docSnapshot.data() ?? {};
+      List<dynamic> summaries = List.from(data['summaries'] ?? []);
       
-      for (final id in _selectedAbayaIds) {
-        final abaya = await getAbayaById(id);
-        if (abaya != null) {
-          selectedAbayasData.add(abaya.toMap());
+      // If we have an active summary ID, update that one
+      if (_activeSummaryId != null) {
+        // Find the summary with this ID
+        final existingIndex = summaries.indexWhere((s) => s['id'] == _activeSummaryId);
+        
+        if (existingIndex >= 0) {
+          // Update the selectedAbayas in the existing summary
+          final updatedSummary = {
+            ...summaries[existingIndex] as Map<String, dynamic>,
+            'selectedAbayas': selectedAbayasData,
+            'timestamp': FieldValue.serverTimestamp(),
+          };
+          
+          summaries[existingIndex] = updatedSummary;
+        } else {
+          // Active summary not found, create a new one
+          final newSummary = {
+            'id': _activeSummaryId,
+            'userId': _user!.uid,
+            'selectedAbayas': selectedAbayasData,
+            'timestamp': FieldValue.serverTimestamp(),
+          };
+          
+          summaries.add(newSummary);
         }
+      } else {
+        // No active summary, create a default one
+        final defaultSummaryId = 'default-${DateTime.now().millisecondsSinceEpoch}';
+        _activeSummaryId = defaultSummaryId;
+        
+        final newSummary = {
+          'id': defaultSummaryId,
+          'userId': _user!.uid,
+          'selectedAbayas': selectedAbayasData,
+          'timestamp': FieldValue.serverTimestamp(),
+        };
+        
+        summaries.add(newSummary);
       }
+      
+      // Update the document with the updated summaries array
+      await docRef.update({
+        'summaries': summaries,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
       
       if (_debugMode) {
-        print('🔍 Prepared ${selectedAbayasData.length} abaya objects for saving');
+        print('✅ Successfully saved selected abayas to summary');
       }
+    } else {
+      // Create a new document with a default summary
+      final defaultSummaryId = 'default-${DateTime.now().millisecondsSinceEpoch}';
+      _activeSummaryId = defaultSummaryId;
       
-      await _firestore.collection('my summary').doc(_user!.uid).set({
+      final newSummary = {
+        'id': defaultSummaryId,
+        'userId': _user!.uid,
         'selectedAbayas': selectedAbayasData,
         'timestamp': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      
+      await docRef.set({
+        'userId': _user!.uid,
+        'summaries': [newSummary],
+        'timestamp': FieldValue.serverTimestamp(),
+      });
       
       if (_debugMode) {
-        print('✅ Successfully saved selected abayas to Firestore');
+        print('✅ Successfully created new summary document with selected abayas');
       }
-    } catch (e) {
-      if (_debugMode) {
-        print('❌ Error saving selected abayas: $e');
-      }
-      throw e;
     }
+  } catch (e) {
+    if (_debugMode) {
+      print('❌ Error saving selected abayas: $e');
+    }
+    
+    _retryCount++;
+    if (_retryCount < _maxRetries) {
+      if (_debugMode) {
+        print('🔄 Retry attempt $_retryCount for saving selected abayas');
+      }
+      
+      // Wait a bit before retrying
+      await Future.delayed(Duration(seconds: 2 * _retryCount));
+      
+      // Try again
+      await saveSelectedAbayasToSummary();
+      return;
+    }
+    
+    throw e;
   }
+}
+
+// Load selected abayas for a specific summary within the array
+Future<void> loadSelectedAbayasForSummary(String summaryId) async {
+  if (_user == null) {
+    if (_debugMode) {
+      print('❌ Cannot load selected abayas: User is null');
+    }
+    return;
+  }
+  
+  try {
+    _isLoading = true;
+    notifyListeners();
+    
+    if (_debugMode) {
+      print('🔍 Loading selected abayas for summary ID: $summaryId');
+    }
+    
+    // Get the summary document using the user's ID
+    final doc = await _firestore.collection('my summary').doc(_user!.uid).get();
+    
+    if (!doc.exists) {
+      throw Exception('Summary document not found');
+    }
+    
+    final data = doc.data()!;
+    final summariesArray = data['summaries'] as List<dynamic>? ?? [];
+    
+    // Find the specific summary by ID
+    final summary = summariesArray.firstWhere(
+      (s) => s['id'] == summaryId,
+      orElse: () => null,
+    );
+    
+    if (summary == null) {
+      throw Exception('Summary with ID $summaryId not found');
+    }
+    
+    final selectedAbayasData = summary['selectedAbayas'] as List<dynamic>?;
+    
+    if (_debugMode) {
+      print('🔍 Found summary with ${selectedAbayasData?.length ?? 0} selected abayas');
+    }
+    
+    // Set the active summary ID
+    _activeSummaryId = summaryId;
+    
+    // Clear previous selection
+    _selectedAbayaIds.clear();
+    
+    // Add IDs from the summary
+    if (selectedAbayasData != null) {
+      for (final abayaData in selectedAbayasData) {
+        final id = abayaData['id'] as String?;
+        if (id != null) {
+          _selectedAbayaIds.add(id);
+        }
+      }
+    }
+    
+    if (_debugMode) {
+      print('✅ Loaded ${_selectedAbayaIds.length} selected abaya IDs for summary $summaryId');
+    }
+    
+    _isLoading = false;
+    notifyListeners();
+  } catch (e) {
+    if (_debugMode) {
+      print('❌ Error loading selected abayas for summary: $e');
+    }
+    
+    _isLoading = false;
+    _errorMessage = e.toString();
+    
+    _retryCount++;
+    if (_retryCount < _maxRetries) {
+      if (_debugMode) {
+        print('🔄 Retry attempt $_retryCount for loading selected abayas');
+      }
+      
+      // Wait a bit before retrying
+      await Future.delayed(Duration(seconds: 2 * _retryCount));
+      
+      // Try again
+      await loadSelectedAbayasForSummary(summaryId);
+      return;
+    }
+    
+    notifyListeners();
+  }
+}
   
   // Clear the cache to force a reload of data
   void clearCache() {
     _hasApiDataCache = false;
     _cachedBodyShape = null;
+    _retryCount = 0;
     if (_debugMode) {
       print('📦 Abaya data cache cleared');
     }
@@ -404,7 +649,21 @@ class AbayasProvider with ChangeNotifier {
     }
     
     _errorMessage = null;
+    _retryCount = 0;
     notifyListeners();
+  }
+  
+  // Method to retry loading after failure
+  Future<void> retryLoadAbayas({String? bodyShape}) async {
+    if (_debugMode) {
+      print('🔄 Manually retrying to load abayas');
+    }
+    
+    _retryCount = 0;
+    _errorMessage = null;
+    clearCache(); // Clear cache to force refresh
+    
+    await loadRecommendedAbayas(bodyShape: bodyShape, forceRefresh: true);
   }
   
   // Helper function for min

@@ -32,6 +32,16 @@ class ApiService {
   // Create a client with timeout settings
   static final _client = http.Client();
   
+  // Status of the API
+  static bool _apiAvailable = true;
+  static int _consecutiveFailures = 0;
+  static const int _maxConsecutiveFailures = 3;
+  static DateTime? _lastSuccessfulApiCall;
+  
+  // Getter for API status
+  static bool get isApiAvailable => _apiAvailable;
+  static DateTime? get lastSuccessfulApiCall => _lastSuccessfulApiCall;
+  
   // Analyze measurements either from image or manual input
   static Future<Map<String, dynamic>> processMeasurements({
     required double userHeightCm,
@@ -46,6 +56,25 @@ class ApiService {
     }
     
     try {
+      // Check if API is likely down based on consecutive failures
+      if (!_apiAvailable) {
+        if (_debugMode) {
+          print('⚠️ API is marked as unavailable, checking if we should retry');
+        }
+        
+        // If it's been more than 5 minutes since last check, try again
+        final now = DateTime.now();
+        if (_lastSuccessfulApiCall == null || 
+            now.difference(_lastSuccessfulApiCall!).inMinutes > 5) {
+          if (_debugMode) {
+            print('🔄 Trying API again after timeout period');
+          }
+          _apiAvailable = true;
+        } else {
+          throw Exception('خادم API غير متاح حالياً. جاري استخدام البيانات المحلية بدلاً من ذلك.');
+        }
+      }
+      
       // Create a request with retry and timeout handling
       return await NetworkHelper.withRetry(
         attempts: 3,
@@ -93,6 +122,7 @@ class ApiService {
           var streamedResponse = await request.send().timeout(
             const Duration(seconds: 60),
             onTimeout: () {
+              _handleApiFailure();
               throw TimeoutException('Connection timeout. The server might be starting up, please try again.');
             },
           );
@@ -104,15 +134,28 @@ class ApiService {
           }
           
           // Handle response
-          return _handleMeasurementsResponse(response);
+          final result = _handleMeasurementsResponse(response);
+          
+          // If we get here, the API call was successful
+          _handleApiSuccess();
+          
+          return result;
         }
       );
     } on TimeoutException {
+      _handleApiFailure();
       throw Exception('انتهت مهلة الاتصال. قد يستغرق بدء تشغيل الخادم بعض الوقت، يرجى المحاولة مرة أخرى.');
     } catch (e) {
       if (_debugMode) {
         print('❌ Error processing measurements: $e');
       }
+      
+      // Don't mark as API failure if it's our custom exception for unavailable API
+      if (e.toString().contains('خادم API غير متاح حالياً')) {
+        rethrow;
+      }
+      
+      _handleApiFailure();
       
       // Translate common error messages to Arabic
       if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
@@ -155,9 +198,11 @@ class ApiService {
       }
       throw Exception('لم يتم إرجاع أي نتائج من الخادم');
     } else if (response.statusCode == 422) {
+      _handleApiFailure();
       var error = jsonDecode(response.body);
       throw Exception('خطأ في التحقق من البيانات: ${error['detail']}');
     } else {
+      _handleApiFailure();
       if (_debugMode) {
         print('❌ API error response: ${response.body}');
       }
@@ -172,6 +217,25 @@ class ApiService {
     }
     
     try {
+      // Check if API is likely down based on consecutive failures
+      if (!_apiAvailable) {
+        if (_debugMode) {
+          print('⚠️ API is marked as unavailable, checking if we should retry');
+        }
+        
+        // If it's been more than 5 minutes since last check, try again
+        final now = DateTime.now();
+        if (_lastSuccessfulApiCall == null || 
+            now.difference(_lastSuccessfulApiCall!).inMinutes > 5) {
+          if (_debugMode) {
+            print('🔄 Trying API again after timeout period');
+          }
+          _apiAvailable = true;
+        } else {
+          throw Exception('خادم API غير متاح حالياً. جاري استخدام البيانات المحلية بدلاً من ذلك.');
+        }
+      }
+      
       // Convert Arabic body type to English for API request
       String englishBodyType = bodyTypeToEnglish[bodyShape] ?? bodyShape;
       
@@ -197,6 +261,7 @@ class ApiService {
           ).timeout(
             const Duration(seconds: 60),
             onTimeout: () {
+              _handleApiFailure();
               throw TimeoutException('Connection timeout. The server might be starting up, please try again.');
             },
           );
@@ -205,15 +270,28 @@ class ApiService {
             print('🔍 API response status: ${response.statusCode}');
           }
           
-          return _handleRecommendationsResponse(response);
+          final result = _handleRecommendationsResponse(response);
+          
+          // If we get here, the API call was successful
+          _handleApiSuccess();
+          
+          return result;
         }
       );
     } on TimeoutException {
+      _handleApiFailure();
       throw Exception('انتهت مهلة الاتصال. قد يستغرق بدء تشغيل الخادم بعض الوقت، يرجى المحاولة مرة أخرى.');
     } catch (e) {
       if (_debugMode) {
         print('❌ Error getting recommendations: $e');
       }
+      
+      // Don't mark as API failure if it's our custom exception for unavailable API
+      if (e.toString().contains('خادم API غير متاح حالياً')) {
+        rethrow;
+      }
+      
+      _handleApiFailure();
       
       // Translate common error messages to Arabic
       if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
@@ -284,9 +362,11 @@ class ApiService {
       
       return recommendations;
     } else if (response.statusCode == 422) {
+      _handleApiFailure();
       var error = jsonDecode(response.body);
       throw Exception('خطأ في التحقق من البيانات: ${error['detail']}');
     } else {
+      _handleApiFailure();
       if (_debugMode) {
         print('❌ API error response: ${response.body}');
       }
@@ -327,6 +407,7 @@ class ApiService {
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
+          _handleApiFailure();
           throw TimeoutException('Connection timeout');
         },
       );
@@ -335,11 +416,21 @@ class ApiService {
         print('🔍 API response status: ${response.statusCode}');
       }
       
-      return response.statusCode == 200 || response.statusCode == 201;
+      final success = response.statusCode == 200 || response.statusCode == 201;
+      
+      if (success) {
+        _handleApiSuccess();
+      } else {
+        _handleApiFailure();
+      }
+      
+      return success;
     } catch (e) {
       if (_debugMode) {
         print('❌ Error sending support ticket: $e');
       }
+      
+      _handleApiFailure();
       
       // Just return false on error - we already have Firestore backup
       return false;
@@ -364,12 +455,50 @@ class ApiService {
         print('🔍 API health check status: ${response.statusCode}');
       }
       
-      return response.statusCode == 200;
+      final isHealthy = response.statusCode == 200;
+      
+      if (isHealthy) {
+        _handleApiSuccess();
+      } else {
+        _handleApiFailure();
+      }
+      
+      return isHealthy;
     } catch (e) {
       if (_debugMode) {
         print('❌ API health check failed: $e');
       }
+      
+      _handleApiFailure();
       return false;
+    }
+  }
+  
+  // Mark API as successful
+  static void _handleApiSuccess() {
+    _consecutiveFailures = 0;
+    _apiAvailable = true;
+    _lastSuccessfulApiCall = DateTime.now();
+    
+    if (_debugMode) {
+      print('✅ API call successful, resetting failure count');
+    }
+  }
+  
+  // Mark API as failed
+  static void _handleApiFailure() {
+    _consecutiveFailures++;
+    
+    if (_consecutiveFailures >= _maxConsecutiveFailures) {
+      _apiAvailable = false;
+      
+      if (_debugMode) {
+        print('⚠️ API marked as unavailable after $_consecutiveFailures consecutive failures');
+      }
+    }
+    
+    if (_debugMode) {
+      print('⚠️ API call failed, consecutive failures: $_consecutiveFailures');
     }
   }
   
@@ -389,6 +518,16 @@ class ApiService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+  
+  // Reset API status - can be called manually to force a retry
+  static void resetApiStatus() {
+    _apiAvailable = true;
+    _consecutiveFailures = 0;
+    
+    if (_debugMode) {
+      print('🔄 API status manually reset');
     }
   }
   

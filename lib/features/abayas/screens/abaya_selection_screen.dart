@@ -8,7 +8,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/rtl_scaffold.dart';
 import '../providers/abayas_provider.dart';
 import '../../measurements/providers/measurements_provider.dart';
+import '../../summary/providers/summary_provider.dart';
 import '../../../core/widgets/reliable_network_image.dart';
+import '../../../core/services/api_service.dart';
 
 class AbayaSelectionScreen extends StatefulWidget {
   const AbayaSelectionScreen({super.key});
@@ -23,6 +25,7 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
   String? _errorMessage;
   bool _isRetrying = false;
   bool _debugMode = true; // Set to false in production
+  bool _isApiAvailable = true;
 
   @override
   void initState() {
@@ -44,6 +47,12 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
         _selectedAbayas = Set<String>.from(abayasProvider.selectedAbayaIds);
       });
     }
+    
+    // Check if we need to set the active summary ID
+    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+    if (summaryProvider.activeSummaryId != null) {
+      abayasProvider.setActiveSummaryId(summaryProvider.activeSummaryId);
+    }
   }
 
   Future<void> _loadAbayas() async {
@@ -56,14 +65,25 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
     });
     
     try {
+      // First check if the API is available
+      _isApiAvailable = ApiService.isApiAvailable;
+      
       final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
       final bodyShape = measurementsProvider.bodyShape;
       
       if (_debugMode) {
         print('⚙️ Loading abayas for body shape: $bodyShape');
+        print('⚙️ API availability: $_isApiAvailable');
       }
       
       final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+      
+      // If we have an active summary, load its selected abayas
+      final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+      if (summaryProvider.activeSummaryId != null) {
+        await abayasProvider.loadSelectedAbayasForSummary(summaryProvider.activeSummaryId!);
+      }
+      
       await abayasProvider.loadRecommendedAbayas(bodyShape: bodyShape);
       
       if (_debugMode) {
@@ -87,6 +107,7 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
           _isLoading = false;
           _errorMessage = abayasProvider.errorMessage;
           _selectedAbayas = Set<String>.from(abayasProvider.selectedAbayaIds);
+          _isApiAvailable = ApiService.isApiAvailable;
         });
       }
     } catch (e) {
@@ -98,6 +119,7 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
         setState(() {
           _isLoading = false;
           _errorMessage = e.toString();
+          _isApiAvailable = ApiService.isApiAvailable;
         });
       }
     }
@@ -112,13 +134,38 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
       _isRetrying = true;
     });
     
-    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-    abayasProvider.clearCache(); // Clear the cache to force a reload
-    await _loadAbayas();
+    // Reset API status to force a retry with the API
+    ApiService.resetApiStatus();
     
-    setState(() {
-      _isRetrying = false;
-    });
+    final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+    
+    // Clear the cache to force a reload
+    abayasProvider.clearCache();
+    
+    // Get the current body shape
+    final measurementsProvider = Provider.of<MeasurementsProvider>(context, listen: false);
+    final bodyShape = measurementsProvider.bodyShape;
+    
+    try {
+      // Try to load abayas with a forced refresh
+      await abayasProvider.retryLoadAbayas(bodyShape: bodyShape);
+      
+      if (mounted) {
+        setState(() {
+          _isRetrying = false;
+          _errorMessage = abayasProvider.errorMessage;
+          _isApiAvailable = ApiService.isApiAvailable;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRetrying = false;
+          _errorMessage = e.toString();
+          _isApiAvailable = ApiService.isApiAvailable;
+        });
+      }
+    }
   }
 
   void _toggleSelection(String abayaId) {
@@ -151,7 +198,13 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
       showBackButton: true,
       confirmOnBack: _selectedAbayas.isNotEmpty,
       fallbackRoute: '/home',
-      confirmationMessage: 'هل أنت متأكدة من الخروج؟ سيتم فقدان العبايات المختارة و القياسات المدخلة',
+      confirmationMessage: 'هل أنت متأكدة من الخروج؟ سيتم فقدان العبايات المختارة',
+      actions: [
+        IconButton(
+          icon: Icon(Icons.refresh),
+          onPressed: _isRetrying ? null : _forceRefreshAbayas,
+        ),
+      ],
       body: Column(
         children: [
           Padding(
@@ -177,6 +230,30 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
               ],
             ),
           ),
+          
+          // API Status indicator
+          if (!_isApiAvailable)
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.amber[800]),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'خادم API غير متاح حالياً. يتم عرض البيانات المحلية.',
+                      style: TextStyle(color: Colors.amber[800], fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           
           // Error/Debug info section
           if (_errorMessage != null)
@@ -322,12 +399,44 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
                     onPressed: _selectedAbayas.isEmpty
                         ? null
                         : () async {
-                            // Save selected abayas before navigating
-                            final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
-                            await abayasProvider.saveSelectedAbayasToSummary();
+                            // Show a loading indicator
+                            _showSavingDialog(context);
                             
-                            if (mounted) {
-                              context.go('/summary');
+                            try {
+                              // Save selected abayas before navigating
+                              final abayasProvider = Provider.of<AbayasProvider>(context, listen: false);
+                              await abayasProvider.saveSelectedAbayasToSummary();
+                              
+                              if (mounted) {
+                                // Dismiss the loading dialog
+                                Navigator.pop(context);
+                                
+                                // Navigate to summary
+                                context.go('/summary');
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                // Dismiss the loading dialog
+                                Navigator.pop(context);
+                                
+                                // Show error
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('فشل في حفظ العبايات: ${e.toString()}'),
+                                    action: SnackBarAction(
+                                      label: 'إعادة المحاولة',
+                                      onPressed: () {
+                                        // Try again
+                                        abayasProvider.saveSelectedAbayasToSummary().then((_) {
+                                          if (mounted) {
+                                            context.go('/summary');
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                );
+                              }
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -341,6 +450,25 @@ class _AbayaSelectionScreenState extends State<AbayaSelectionScreen> {
           ),
         ],
       ),
+    );
+  }
+  
+  void _showSavingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SpinKitCircle(color: AppTheme.primaryColor, size: 40),
+              SizedBox(height: 16),
+              Text('جاري حفظ العبايات المختارة...'),
+            ],
+          ),
+        );
+      },
     );
   }
 }

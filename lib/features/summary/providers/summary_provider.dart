@@ -1,3 +1,5 @@
+// lib/features/summary/providers/summary_provider.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,8 +12,14 @@ class SummaryProvider with ChangeNotifier {
   FirebaseFirestore? _firestore;
   User? _user;
   
+  // Current active summary data
   Map<String, dynamic>? _summary;
   List<AbayaModel> _selectedAbayas = [];
+  String? _activeSummaryId; // ID of the active summary within the array
+  
+  // All user summaries for listing - now stored in a single document
+  List<Map<String, dynamic>> _allUserSummaries = [];
+  
   bool _isLoading = false;
   String? _errorMessage;
   bool _debugMode = true; // Set to false in production
@@ -20,6 +28,8 @@ class SummaryProvider with ChangeNotifier {
   List<AbayaModel> get selectedAbayas => _selectedAbayas;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String? get activeSummaryId => _activeSummaryId;
+  List<Map<String, dynamic>> get allUserSummaries => _allUserSummaries;
   
   SummaryProvider() {
     _initializeFirebase();
@@ -38,13 +48,137 @@ class SummaryProvider with ChangeNotifier {
   void updateAuth(app_auth.AuthProvider authProvider) {
     _user = authProvider.user;
     if (_user != null) {
-      loadSummary();
+      loadAllUserSummaries();
     } else {
       _summary = null;
       _selectedAbayas = [];
+      _allUserSummaries = [];
     }
   }
   
+  // Load all summaries for the current user - adapted for security rules
+  Future<void> loadAllUserSummaries() async {
+    if (_user == null || _firestore == null) return;
+    
+    try {
+      // Avoid calling setState during build
+      if (_isLoading) return;
+      
+      _isLoading = true;
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('🔍 SummaryProvider: Loading all summaries for user: ${_user!.uid}');
+      }
+      
+      // With the current security rules, we need to access the document directly
+      // using the user's ID as the document ID
+      final docRef = _firestore!.collection('my summary').doc(_user!.uid);
+      final docSnapshot = await docRef.get();
+      
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() ?? {};
+        
+        // Extract the summaries array from the document
+        final summariesData = data['summaries'] as List<dynamic>? ?? [];
+        
+        if (_debugMode) {
+          print('🔍 Found ${summariesData.length} summaries in user document');
+        }
+        
+        _allUserSummaries = summariesData.map((summary) {
+          return Map<String, dynamic>.from(summary);
+        }).toList();
+        
+        // Sort by timestamp if available
+        _allUserSummaries.sort((a, b) {
+          final aTimestamp = a['timestamp'] as Timestamp?;
+          final bTimestamp = b['timestamp'] as Timestamp?;
+          
+          if (aTimestamp == null && bTimestamp == null) return 0;
+          if (aTimestamp == null) return 1;
+          if (bTimestamp == null) return -1;
+          
+          return bTimestamp.compareTo(aTimestamp); // Descending order
+        });
+        
+        // If we don't have an active summary, set the first one as active
+        if (_summary == null && _allUserSummaries.isNotEmpty) {
+          await setActiveSummary(_allUserSummaries.first);
+        }
+      } else {
+        // No document exists yet - create an empty document
+        await docRef.set({
+          'userId': _user!.uid,
+          'summaries': [],
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        _allUserSummaries = [];
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('✅ Successfully loaded all user summaries');
+      }
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error loading all summaries: $e');
+      }
+      
+      notifyListeners();
+    }
+  }
+  
+  // Set the active summary from a data object
+  Future<void> setActiveSummary(Map<String, dynamic> summaryData) async {
+    if (_user == null || _firestore == null) return;
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Setting active summary: ${summaryData['id']}');
+      }
+      
+      _activeSummaryId = summaryData['id'];
+      _summary = summaryData;
+      
+      // Parse selected abayas
+      final selectedAbayasData = summaryData['selectedAbayas'] as List<dynamic>?;
+      
+      if (selectedAbayasData != null) {
+        _selectedAbayas = selectedAbayasData
+            .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
+            .toList();
+            
+        if (_debugMode) {
+          print('🔍 Loaded ${_selectedAbayas.length} selected abayas for active summary');
+        }
+      } else {
+        _selectedAbayas = [];
+      }
+      
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('✅ Active summary set successfully');
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error setting active summary: $e');
+      }
+      
+      notifyListeners();
+    }
+  }
+  
+  // Load the default summary
   Future<void> loadSummary() async {
     if (_user == null || _firestore == null) return;
     
@@ -59,7 +193,7 @@ class SummaryProvider with ChangeNotifier {
         print('🔍 SummaryProvider: Loading summary for user: ${_user!.uid}');
       }
       
-      // First check for selected abayas in the summary collection
+      // Access document directly using user ID
       final summaryDoc = await _firestore!.collection('my summary').doc(_user!.uid).get();
       
       if (_debugMode) {
@@ -69,30 +203,59 @@ class SummaryProvider with ChangeNotifier {
         }
       }
       
-      // Parse selected abayas
-      final selectedAbayasData = summaryDoc.data()?['selectedAbayas'] as List<dynamic>?;
-      
-      if (_debugMode && selectedAbayasData != null) {
-        print('🔍 Selected abayas count in Firestore: ${selectedAbayasData.length}');
-      }
-      
-      if (selectedAbayasData != null) {
-        _selectedAbayas = selectedAbayasData
-            .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
-            .toList();
+      // If we have an active summary ID, load that summary from the array
+      if (summaryDoc.exists) {
+        final data = summaryDoc.data() ?? {};
+        final summariesArray = data['summaries'] as List<dynamic>? ?? [];
+        
+        if (_activeSummaryId != null) {
+          // Find the active summary in the array
+          final activeSummary = summariesArray.firstWhere(
+            (summary) => summary['id'] == _activeSummaryId,
+            orElse: () => summariesArray.isNotEmpty ? summariesArray.first : null,
+          );
+          
+          if (activeSummary != null) {
+            _summary = Map<String, dynamic>.from(activeSummary);
             
-        if (_debugMode) {
-          print('🔍 Loaded ${_selectedAbayas.length} selected abayas');
-          for (var abaya in _selectedAbayas) {
-            print('🔍 Loaded abaya: ID=${abaya.id}, Model=${abaya.model}');
+            // Parse selected abayas
+            final selectedAbayasData = _summary!['selectedAbayas'] as List<dynamic>?;
+            
+            if (selectedAbayasData != null) {
+              _selectedAbayas = selectedAbayasData
+                  .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
+                  .toList();
+            } else {
+              _selectedAbayas = [];
+            }
+          } else {
+            // No active summary found, create a new one
+            _summary = {};
+            _selectedAbayas = [];
           }
+        } else if (summariesArray.isNotEmpty) {
+          // No active summary ID, use the first one
+          _summary = Map<String, dynamic>.from(summariesArray.first);
+          _activeSummaryId = _summary!['id'];
+          
+          // Parse selected abayas
+          final selectedAbayasData = _summary!['selectedAbayas'] as List<dynamic>?;
+          
+          if (selectedAbayasData != null) {
+            _selectedAbayas = selectedAbayasData
+                .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
+                .toList();
+          } else {
+            _selectedAbayas = [];
+          }
+        } else {
+          // No summaries exist yet
+          _summary = {};
+          _selectedAbayas = [];
         }
       } else {
-        // If no selected abayas in summary, try looking in the abayas provider
-        // (This would be handled in the abayas provider)
-        if (_debugMode) {
-          print('⚠️ No selected abayas found in summary document');
-        }
+        // No document exists, create a new one
+        _summary = {};
         _selectedAbayas = [];
       }
       
@@ -102,12 +265,18 @@ class SummaryProvider with ChangeNotifier {
       // Fetch profile
       final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
       
-      // Compile summary
-      _summary = {
-        'measurements': measurementsDoc.data() ?? {},
-        'profile': profileDoc.data() ?? {},
-        'selectedAbayas': selectedAbayasData ?? [],
-      };
+      // Merge with latest profile and measurements data
+      if (_summary == null || _summary!.isEmpty) {
+        _summary = {
+          'measurements': measurementsDoc.data() ?? {},
+          'profile': profileDoc.data() ?? {},
+          'selectedAbayas': [],
+        };
+      } else {
+        // Make sure we have the latest measurements and profile
+        _summary!['measurements'] = measurementsDoc.data() ?? _summary!['measurements'] ?? {};
+        _summary!['profile'] = profileDoc.data() ?? _summary!['profile'] ?? {};
+      }
       
       _isLoading = false;
       notifyListeners();
@@ -125,6 +294,267 @@ class SummaryProvider with ChangeNotifier {
       }
       
       notifyListeners();
+    }
+  }
+  
+  // Create a new summary
+  Future<void> createNewSummary() async {
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Creating new summary for user: ${_user!.uid}');
+      }
+      
+      // Clear existing summary data
+      _summary = {};
+      _selectedAbayas = [];
+      
+      // Generate a unique ID for this summary
+      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // Fetch measurements
+      final measurementsDoc = await _firestore!.collection('my measurements').doc(_user!.uid).get();
+      
+      // Fetch profile
+      final profileDoc = await _firestore!.collection('Registration').doc(_user!.uid).get();
+      
+      // Create new summary
+      _summary = {
+        'id': _activeSummaryId,
+        'userId': _user!.uid,
+        'measurements': measurementsDoc.data() ?? {},
+        'profile': profileDoc.data() ?? {},
+        'selectedAbayas': [],
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      
+      // Save right away to ensure it's in the list
+      await saveSummary();
+      
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('✅ New summary created successfully with ID: $_activeSummaryId');
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error creating new summary: $e');
+      }
+      
+      notifyListeners();
+      throw e;
+    }
+  }
+  
+  // Duplicate an existing summary
+  Future<void> duplicateSummary(Map<String, dynamic> sourceSummary) async {
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Duplicating summary for user: ${_user!.uid}');
+      }
+      
+      // Generate a unique ID for the duplicated summary
+      _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      // Create a copy of the source summary
+      _summary = {
+        'id': _activeSummaryId,
+        'userId': _user!.uid,
+        'measurements': sourceSummary['measurements'] ?? {},
+        'profile': sourceSummary['profile'] ?? {},
+        'selectedAbayas': sourceSummary['selectedAbayas'] ?? [],
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'isDuplicate': true,
+        'duplicatedFrom': sourceSummary['id'],
+      };
+      
+      // Parse selected abayas
+      final selectedAbayasData = sourceSummary['selectedAbayas'] as List<dynamic>?;
+      
+      if (selectedAbayasData != null) {
+        _selectedAbayas = selectedAbayasData
+            .map((data) => AbayaModel.fromMap(data as Map<String, dynamic>))
+            .toList();
+            
+        if (_debugMode) {
+          print('🔍 Duplicated ${_selectedAbayas.length} selected abayas');
+        }
+      } else {
+        _selectedAbayas = [];
+      }
+      
+      // Save right away
+      await saveSummary();
+      
+      notifyListeners();
+      
+      if (_debugMode) {
+        print('✅ Summary duplicated successfully with ID: $_activeSummaryId');
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error duplicating summary: $e');
+      }
+      
+      notifyListeners();
+      throw e;
+    }
+  }
+  
+  // Save or update the current summary
+  Future<void> saveSummary() async {
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      if (_debugMode) {
+        print('🔍 Saving summary for user: ${_user!.uid}');
+      }
+      
+      if (_summary == null) {
+        throw Exception('No summary data to save');
+      }
+      
+      // Ensure the summary has an ID
+      if (_activeSummaryId == null) {
+        _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+        _summary!['id'] = _activeSummaryId;
+      }
+      
+      // Include user ID and timestamp
+      _summary!['userId'] = _user!.uid;
+      _summary!['timestamp'] = FieldValue.serverTimestamp();
+      
+      // First get the current document
+      final docRef = _firestore!.collection('my summary').doc(_user!.uid);
+      final docSnapshot = await docRef.get();
+      
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() ?? {};
+        List<dynamic> summaries = List.from(data['summaries'] ?? []);
+        
+        // Look for existing summary with this ID
+        final existingIndex = summaries.indexWhere((s) => s['id'] == _activeSummaryId);
+        
+        if (existingIndex >= 0) {
+          // Update existing summary
+          summaries[existingIndex] = _summary;
+        } else {
+          // Add new summary
+          summaries.add(_summary);
+        }
+        
+        // Update the document
+        await docRef.update({
+          'summaries': summaries,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Create new document with this summary
+        await docRef.set({
+          'userId': _user!.uid,
+          'summaries': [_summary],
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      // Refresh the list of all summaries
+      await loadAllUserSummaries();
+      
+      if (_debugMode) {
+        print('✅ Summary saved successfully');
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error saving summary: $e');
+      }
+      
+      notifyListeners();
+      throw e;
+    }
+  }
+  
+  // Delete a summary
+  Future<void> deleteSummary(Map<String, dynamic> summaryToDelete) async {
+    if (_user == null || _firestore == null) {
+      throw Exception('User not authenticated or Firebase not initialized');
+    }
+    
+    try {
+      final summaryId = summaryToDelete['id'];
+      
+      if (summaryId == null) {
+        throw Exception('Invalid summary ID');
+      }
+      
+      if (_debugMode) {
+        print('🔍 Deleting summary with ID: $summaryId');
+      }
+      
+      // Get the current document
+      final docRef = _firestore!.collection('my summary').doc(_user!.uid);
+      final docSnapshot = await docRef.get();
+      
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() ?? {};
+        List<dynamic> summaries = List.from(data['summaries'] ?? []);
+        
+        // Remove the summary with this ID
+        summaries.removeWhere((s) => s['id'] == summaryId);
+        
+        // Update the document
+        await docRef.update({
+          'summaries': summaries,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        // If we just deleted the active summary, clear it
+        if (_activeSummaryId == summaryId) {
+          _summary = null;
+          _selectedAbayas = [];
+          _activeSummaryId = null;
+        }
+        
+        // Refresh the list
+        await loadAllUserSummaries();
+        
+        if (_debugMode) {
+          print('✅ Summary deleted successfully');
+        }
+      } else {
+        if (_debugMode) {
+          print('⚠️ No document found to delete summary from');
+        }
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      
+      if (_debugMode) {
+        print('❌ Error deleting summary: $e');
+      }
+      
+      notifyListeners();
+      throw e;
     }
   }
   
@@ -146,22 +576,30 @@ class SummaryProvider with ChangeNotifier {
       
       final selectedAbayasData = selectedAbayas.map((abaya) => abaya.toMap()).toList();
       
-      final data = {
+      // If we don't have a summary yet, create a new one
+      if (_summary == null) {
+        await createNewSummary();
+      }
+      
+      // Update the active summary
+      _selectedAbayas = selectedAbayas;
+      _summary = {
+        ..._summary ?? {},
         'selectedAbayas': selectedAbayasData,
         'timestamp': FieldValue.serverTimestamp(),
         ...?additionalData,
       };
       
-      await _firestore!.collection('my summary').doc(_user!.uid).set(
-        data,
-        SetOptions(merge: true),
-      );
+      // Ensure the summary has an ID
+      if (_activeSummaryId == null) {
+        _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+        _summary!['id'] = _activeSummaryId;
+      } else {
+        _summary!['id'] = _activeSummaryId;
+      }
       
-      _selectedAbayas = selectedAbayas;
-      _summary = {
-        ..._summary ?? {},
-        ...data,
-      };
+      // Save to Firestore
+      await saveSummary();
       
       if (_debugMode) {
         print('✅ Summary updated successfully');
@@ -190,8 +628,15 @@ class SummaryProvider with ChangeNotifier {
         print('🔍 Updating measurements: ${measurements.keys.join(', ')}');
       }
       
+      // Update measurements collection
       await _firestore!.collection('my measurements').doc(_user!.uid).update(measurements);
       
+      // If we don't have a summary yet, create a new one
+      if (_summary == null) {
+        await createNewSummary();
+      }
+      
+      // Update the active summary
       _summary = {
         ..._summary ?? {},
         'measurements': {
@@ -199,6 +644,17 @@ class SummaryProvider with ChangeNotifier {
           ...measurements,
         },
       };
+      
+      // Ensure the summary has an ID
+      if (_activeSummaryId == null) {
+        _activeSummaryId = DateTime.now().millisecondsSinceEpoch.toString();
+        _summary!['id'] = _activeSummaryId;
+      } else {
+        _summary!['id'] = _activeSummaryId;
+      }
+      
+      // Save to Firestore
+      await saveSummary();
       
       if (_debugMode) {
         print('✅ Measurements updated successfully');
@@ -248,6 +704,7 @@ class SummaryProvider with ChangeNotifier {
   void clearSummary() {
     _summary = null;
     _selectedAbayas = [];
+    _activeSummaryId = null;
     notifyListeners();
     
     if (_debugMode) {
