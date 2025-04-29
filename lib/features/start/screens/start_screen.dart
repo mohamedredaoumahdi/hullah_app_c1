@@ -119,37 +119,37 @@ class StartScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ElevatedButton(
-                      onPressed: () => context.go('/measurements/instructions'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppTheme.primaryColor,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        textStyle: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        elevation: 4,
-                        shadowColor: Colors.black.withOpacity(0.3),
-                      ),
-                      child: Text('ابدأ'),
-                    ),
                     if (!authProvider.isAuthenticated)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16.0),
-                        child: TextButton(
-                          onPressed: () => context.go('/login'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.white,
+                      ElevatedButton(
+                        onPressed: () => context.go('/login'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppTheme.primaryColor,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          textStyle: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                          child: Text(
-                            'تسجيل الدخول',
-                            style: TextStyle(
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
+                          elevation: 4,
+                          shadowColor: Colors.black.withOpacity(0.3),
                         ),
+                        child: Text('تسجيل الدخول'),
                       ),
+                    //   Padding(
+                    //     padding: const EdgeInsets.only(top: 16.0),
+                    //     child: TextButton(
+                    //       onPressed: () => context.go('/login'),
+                    //       style: TextButton.styleFrom(
+                    //         foregroundColor: Colors.white,
+                    //       ),
+                    //       child: Text(
+                    //         'تسجيل الدخول',
+                    //         style: TextStyle(
+                    //           decoration: TextDecoration.underline,
+                    //         ),
+                    //       ),
+                    //     ),
+                    //   ),
                   ],
                 ),
               ),
