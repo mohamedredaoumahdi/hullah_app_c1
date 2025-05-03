@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hullah_app/core/utils/pdf_generator.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../../abayas/models/abaya_model.dart';
 import '../../auth/providers/auth_provider.dart' as app_auth;
@@ -697,33 +698,51 @@ class SummaryProvider with ChangeNotifier {
   }
   
   Future<File> generatePDF() async {
-    if (_summary == null) {
-      throw Exception('No summary data available');
-    }
+  if (_summary == null) {
+    throw Exception('No summary data available');
+  }
+  
+  if (_debugMode) {
+    print('🔍 Generating PDF with ${_selectedAbayas.length} abayas');
+  }
+  
+  try {
+    // Generate the PDF file
+    final file = await PdfGenerator.generateSummaryPdf(
+      summary: _summary!,
+      selectedAbayas: _selectedAbayas,
+    );
     
     if (_debugMode) {
-      print('🔍 Generating PDF with ${_selectedAbayas.length} abayas');
+      print('✅ PDF generated successfully: ${file.path}');
     }
     
+    // Save a copy to a more accessible location for the user (optional)
     try {
-      final file = await PdfGenerator.generateSummaryPdf(
-        summary: _summary!,
-        selectedAbayas: _selectedAbayas,
-      );
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'ملخص_تفصيل_العباية_$timestamp.pdf';
+      final savedFile = await file.copy('${appDocDir.path}/$fileName');
       
       if (_debugMode) {
-        print('✅ PDF generated successfully: ${file.path}');
+        print('✅ PDF saved to accessible location: ${savedFile.path}');
       }
-      
-      return file;
     } catch (e) {
+      // Don't throw an error here, just log it
       if (_debugMode) {
-        print('❌ Error generating PDF: $e');
+        print('⚠️ Could not save PDF copy to accessible location: $e');
       }
-      
-      throw e;
     }
+    
+    return file;
+  } catch (e) {
+    if (_debugMode) {
+      print('❌ Error generating PDF: $e');
+    }
+    
+    throw e;
   }
+}
   
   void clearSummary() {
     _summary = null;

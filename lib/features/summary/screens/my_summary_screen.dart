@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hullah_app/features/abayas/models/abaya_model.dart';
+import 'package:hullah_app/features/summary/screens/pdf_viewer_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
@@ -164,26 +165,76 @@ class _MySummaryScreenState extends State<MySummaryScreen> {
     }
   }
 
-  Future<void> _generatePDF() async {
-    final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+  // Modification for lib/features/summary/screens/my_summary_screen.dart
+// Add this function to the _MySummaryScreenState class
+
+Future<void> _generatePDF() async {
+  final summaryProvider = Provider.of<SummaryProvider>(context, listen: false);
+  
+  // Show loading indicator
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.primaryColor),
+            SizedBox(height: 16),
+            Text('جاري إنشاء ملف PDF...'),
+          ],
+        ),
+      );
+    },
+  );
+  
+  try {
+    final file = await summaryProvider.generatePDF();
     
-    try {
-      final file = await summaryProvider.generatePDF();
+    // Close the loading dialog
+    if (mounted) Navigator.pop(context);
+    
+    if (mounted) {
+      // Navigate to the PDF viewer screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PdfViewerScreen(
+            pdfFile: file,
+            title: 'ملخص تفصيل العباية',
+          ),
+        ),
+      );
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم إنشاء ملف PDF بنجاح')),
-        );
-        // Open the PDF file or share it
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل في إنشاء ملف PDF')),
-        );
-      }
+      // Show a brief notification
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم إنشاء ملف PDF بنجاح'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  } catch (e) {
+    // Close the loading dialog
+    if (mounted) Navigator.pop(context);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل في إنشاء ملف PDF: ${e.toString()}'),
+          duration: Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'حسناً',
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
     }
   }
+}
   
   Widget _buildSectionHeader(String title) {
     return Padding(

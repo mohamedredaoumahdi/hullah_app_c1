@@ -1,6 +1,9 @@
 // lib/core/routes/app_router.dart
+import 'dart:io';
+
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import 'package:hullah_app/features/summary/screens/pdf_viewer_screen.dart';
 import '../utils/navigation_utils.dart';
 
 import '../../features/splash/screens/splash_screen.dart';
@@ -90,6 +93,15 @@ class AppRouter {
       GoRoute(
         path: '/thank-you',
         builder: (context, state) => const ThankYouScreen(),
+      ),
+      GoRoute(
+        path: '/pdf-viewer',
+        builder: (context, state) {
+          final args = state.extra as Map<String, dynamic>;
+          final pdfFile = args['pdfFile'] as File;
+          final title = args['title'] as String? ?? 'عرض الملف';
+          return PdfViewerScreen(pdfFile: pdfFile, title: title);
+        },
       ),
     ],
   );

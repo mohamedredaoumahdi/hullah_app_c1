@@ -273,7 +273,7 @@ class PdfGenerator {
           pw.SizedBox(height: 10),
           _buildAbayaInfoRow('القماش', abaya.fabric, regularFont, boldFont),
           _buildAbayaInfoRow('اللون', abaya.color, regularFont, boldFont),
-          _buildAbayaInfoRow('شكل الجسم المناسب', abaya.bodyShapeCategory, regularFont, boldFont),
+          //_buildAbayaInfoRow('شكل الجسم المناسب', abaya.bodyShapeCategory, regularFont, boldFont),
           pw.SizedBox(height: 10),
           pw.Container(
             width: double.infinity,
