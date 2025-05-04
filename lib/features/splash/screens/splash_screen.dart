@@ -55,9 +55,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _navigateToNext() async {
     try {
       // Wait for animation and give time for Firebase to settle
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 5));
       
       if (!mounted) return;
+
+      // Check if the user is authenticated
+      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
       
       // Navigate to the Start screen regardless of authentication status
       context.go('/start');
@@ -65,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       print('Error in splash navigation: $e');
       // If there's an error, still try to navigate to start
       if (mounted) {
-        context.go('/start');
+        context.go('/login');
       }
     }
   }

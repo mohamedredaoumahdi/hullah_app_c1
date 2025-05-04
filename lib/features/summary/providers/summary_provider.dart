@@ -87,9 +87,29 @@ class SummaryProvider with ChangeNotifier {
           print('🔍 Found ${summariesData.length} summaries in user document');
         }
         
-        _allUserSummaries = summariesData.map((summary) {
-          return Map<String, dynamic>.from(summary);
-        }).toList();
+        // Create a list to hold unique summaries
+        final List<Map<String, dynamic>> uniqueSummaries = [];
+        final Set<String> processedIds = {};
+        
+        // Process summaries and filter out duplicates
+        for (var summary in summariesData) {
+          final Map<String, dynamic> summaryMap = Map<String, dynamic>.from(summary);
+          final String? summaryId = summaryMap['id']?.toString();
+          
+          // Only add summaries with unique IDs
+          if (summaryId != null && !processedIds.contains(summaryId)) {
+            processedIds.add(summaryId);
+            uniqueSummaries.add(summaryMap);
+            
+            if (_debugMode) {
+              print('🔍 Added unique summary with ID: $summaryId');
+            }
+          } else if (_debugMode && summaryId != null) {
+            print('⚠️ Skipping duplicate summary with ID: $summaryId');
+          }
+        }
+        
+        _allUserSummaries = uniqueSummaries;
         
         // Sort by timestamp if available
         _allUserSummaries.sort((a, b) {
@@ -115,6 +135,10 @@ class SummaryProvider with ChangeNotifier {
         // If we don't have an active summary, set the first one as active
         if (_summary == null && _allUserSummaries.isNotEmpty) {
           await setActiveSummary(_allUserSummaries.first);
+        }
+        
+        if (_debugMode) {
+          print('✅ Successfully loaded ${_allUserSummaries.length} unique summaries');
         }
       } else {
         // No document exists yet - create an empty document
@@ -470,16 +494,46 @@ class SummaryProvider with ChangeNotifier {
         if (existingIndex >= 0) {
           // Update existing summary
           summaries[existingIndex] = _summary;
+          
+          if (_debugMode) {
+            print('🔍 Updating existing summary at index $existingIndex');
+          }
         } else {
           // Add new summary
           summaries.add(_summary);
+          
+          if (_debugMode) {
+            print('🔍 Adding new summary to array');
+          }
+        }
+        
+        // Deduplicate summaries before saving
+        final uniqueSummaries = <Map<String, dynamic>>[];
+        final processedIds = <String>{};
+        
+        for (final summary in summaries) {
+          final summaryMap = summary as Map<String, dynamic>;
+          final summaryId = summaryMap['id']?.toString();
+          
+          if (summaryId != null && !processedIds.contains(summaryId)) {
+            processedIds.add(summaryId);
+            uniqueSummaries.add(summaryMap);
+            
+            if (_debugMode) {
+              print('🔍 Adding unique summary with ID $summaryId to save list');
+            }
+          }
         }
         
         // Update the document
         await docRef.update({
-          'summaries': summaries,
+          'summaries': uniqueSummaries,
           'timestamp': currentTimestamp,
         });
+        
+        if (_debugMode) {
+          print('✅ Updated document with ${uniqueSummaries.length} unique summaries');
+        }
       } else {
         // Create new document with this summary
         await docRef.set({
@@ -487,6 +541,10 @@ class SummaryProvider with ChangeNotifier {
           'summaries': [_summary],
           'timestamp': currentTimestamp,
         });
+        
+        if (_debugMode) {
+          print('✅ Created new document with summary');
+        }
       }
       
       // Refresh the list of all summaries
@@ -698,51 +756,51 @@ class SummaryProvider with ChangeNotifier {
   }
   
   Future<File> generatePDF() async {
-  if (_summary == null) {
-    throw Exception('No summary data available');
-  }
-  
-  if (_debugMode) {
-    print('🔍 Generating PDF with ${_selectedAbayas.length} abayas');
-  }
-  
-  try {
-    // Generate the PDF file
-    final file = await PdfGenerator.generateSummaryPdf(
-      summary: _summary!,
-      selectedAbayas: _selectedAbayas,
-    );
-    
-    if (_debugMode) {
-      print('✅ PDF generated successfully: ${file.path}');
+    if (_summary == null) {
+      throw Exception('No summary data available');
     }
     
-    // Save a copy to a more accessible location for the user (optional)
+    if (_debugMode) {
+      print('🔍 Generating PDF with ${_selectedAbayas.length} abayas');
+    }
+    
     try {
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'ملخص_تفصيل_العباية_$timestamp.pdf';
-      final savedFile = await file.copy('${appDocDir.path}/$fileName');
+      // Generate the PDF file
+      final file = await PdfGenerator.generateSummaryPdf(
+        summary: _summary!,
+        selectedAbayas: _selectedAbayas,
+      );
       
       if (_debugMode) {
-        print('✅ PDF saved to accessible location: ${savedFile.path}');
+        print('✅ PDF generated successfully: ${file.path}');
       }
+      
+      // Save a copy to a more accessible location for the user (optional)
+      try {
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'ملخص_تفصيل_العباية_$timestamp.pdf';
+        final savedFile = await file.copy('${appDocDir.path}/$fileName');
+        
+        if (_debugMode) {
+          print('✅ PDF saved to accessible location: ${savedFile.path}');
+        }
+      } catch (e) {
+        // Don't throw an error here, just log it
+        if (_debugMode) {
+          print('⚠️ Could not save PDF copy to accessible location: $e');
+        }
+      }
+      
+      return file;
     } catch (e) {
-      // Don't throw an error here, just log it
       if (_debugMode) {
-        print('⚠️ Could not save PDF copy to accessible location: $e');
+        print('❌ Error generating PDF: $e');
       }
+      
+      throw e;
     }
-    
-    return file;
-  } catch (e) {
-    if (_debugMode) {
-      print('❌ Error generating PDF: $e');
-    }
-    
-    throw e;
   }
-}
   
   void clearSummary() {
     _summary = null;

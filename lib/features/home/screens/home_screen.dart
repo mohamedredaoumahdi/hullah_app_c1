@@ -151,14 +151,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       'التجارب السابقة',
                       style: Theme.of(context).textTheme.displaySmall,
                     ),
-                    if (userSummaries.isNotEmpty)
-                      TextButton(
-                        onPressed: () {
-                          // Navigate to a separate page showing all experiments
-                          // This would be implemented based on your navigation structure
-                        },
-                        child: Text('عرض الكل'),
-                      ),
+                    // if (userSummaries.isNotEmpty)
+                    //   TextButton(
+                    //     onPressed: () {
+                    //       // Navigate to a separate page showing all experiments
+                    //       // This would be implemented based on your navigation structure
+                    //     },
+                    //     child: Text('عرض الكل'),
+                    //   ),
                   ],
                 ),
                 const SizedBox(height: 16),

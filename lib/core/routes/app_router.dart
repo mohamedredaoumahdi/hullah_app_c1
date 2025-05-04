@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:hullah_app/features/summary/screens/pdf_viewer_screen.dart';
 import '../utils/navigation_utils.dart';
 
@@ -22,10 +23,41 @@ import '../../features/summary/screens/final_summary_screen.dart';
 import '../../features/support/screens/support_screen.dart';
 import '../../features/thank_you/screens/thank_you_screen.dart';
 import '../../features/start/screens/start_screen.dart';
+import '../../features/auth/providers/auth_provider.dart' as app_auth;
 
 class AppRouter {
   static final router = GoRouter(
     initialLocation: '/splash',
+    redirect: (BuildContext context, GoRouterState state) {
+      // Get the auth provider to check authentication status
+      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      final isAuthenticated = authProvider.isAuthenticated;
+      
+      // Don't redirect for splash screen
+      if (state.matchedLocation == '/splash') {
+        return null;
+      }
+      
+      // Define auth routes (routes that don't require authentication)
+      final isAuthRoute = state.matchedLocation == '/login' || 
+                          state.matchedLocation == '/register' ||
+                          state.matchedLocation == '/start';
+      
+      // If user is not authenticated and trying to access a protected route,
+      // redirect to login
+      if (!isAuthenticated && !isAuthRoute) {
+        return '/login';
+      }
+      
+      // If user is authenticated and trying to access auth routes,
+      // redirect to home
+      if (isAuthenticated && isAuthRoute) {
+        return '/home';
+      }
+      
+      // No redirect needed
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/splash',
